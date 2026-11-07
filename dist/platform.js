@@ -2,6 +2,7 @@
 const apiRoot = 'https://ffuqqktvxkbazvzqkfac.supabase.co';
 const publicKey = 'sb_publishable_YQU0fJ9kVchMLMW-tjqenQ_gKGXnofM';
 const adminPath = '/mainadmin-pro';
+const adminEmail = 'enuxespro@enuxes.com';
 const storefrontRoot = 'https://www.enuxes.com';
 const ownerSlug = location.pathname.match(/^\/([a-z0-9]+(?:-[a-z0-9]+)*)\/owner\/?$/)?.[1];
 const sessionKey = ownerSlug ? 'enuxes-owner-session' : 'enuxes-mainadmin-session';
@@ -10,11 +11,12 @@ let adminStores = [];
 let section = 'overview';
 let storeQuery = '';
 let storeStatus = '';
-const sections = {overview:'Overview',stores:'Stores',owners:'Owner access',billing:'Billing holds',archive:'Archive'};
+const sections = {overview:'Overview',stores:'Stores',owners:'Owner access',billing:'Billing',analytics:'Analytics',ads:'Ads',security:'Security',archive:'Archive'};
 const businessColumns = 'id,slug,name,type,description,active';
 
-async function request(endpoint, { method = 'GET', data, token } = {}) {
+async function request(endpoint, { method = 'GET', data, token, prefer } = {}) {
   const headers = { apikey: publicKey };
+  if (prefer) headers.Prefer = prefer;
   if (token) headers.Authorization = 'Bearer ' + token;
   if (data !== undefined) headers['Content-Type'] = 'application/json';
   const response = await fetch(apiRoot + endpoint, {
@@ -56,7 +58,7 @@ async function adminRequest(name, args = {}) {
 function signIn(message = '') {
   app.innerHTML = '<div class="panel" style="max-width:440px;margin:48px auto"><h2>' + (ownerSlug ? 'Store owner' : 'Main Admin') + '</h2>'
     + (message ? '<p class="notice" role="alert">' + esc(message) + '</p>' : '')
-    + '<form id="main-admin-login"><label>Email<input name="email" type="email" autocomplete="username" required></label>'
+    + '<form id="main-admin-login"><label>' + (ownerSlug ? 'Email' : 'Username') + '<input name="email" type="' + (ownerSlug ? 'email' : 'text') + '" autocomplete="username" required></label>'
     + '<label>Password<input name="password" type="password" autocomplete="current-password" required></label>'
     + '<button class="primary">Sign in</button></form></div>';
 }
@@ -71,7 +73,7 @@ function storeCard(store) {
   if (section === 'billing') buttons = store.lifecycle === 'on_hold'
     ? [['active','Release hold'],['closed','Release as closed']]
     : [['on_hold','Put on hold']];
-  if (section === 'owners') buttons = [];
+  if (['owners','analytics','ads'].includes(section)) buttons = [];
   return '<article class="panel stack"><div class="row"><div><strong>' + esc(store.name) + '</strong><br>'
     + '<small>' + esc(store.type.replaceAll('_',' ')) + ' · ' + esc(store.package || 'Starter') + '</small></div>'
     + '<span class="badge">' + labels[store.lifecycle] + '</span></div>'
@@ -79,6 +81,8 @@ function storeCard(store) {
     + (store.status_reason ? '<small>' + esc(store.status_reason) + '</small>' : '')
     + '<div class="toolbar">' + buttons.map(([status,label]) =>
       '<button data-business-status="' + status + '" data-business-id="' + store.id + '">' + label + '</button>').join('')
+    + (section === 'analytics' ? '<button data-analytics="' + store.id + '">View analytics</button>' : '')
+    + (['ads','billing'].includes(section) ? '<button data-ad-settings="' + store.id + '">' + (section === 'billing' ? 'Ad-free billing' : 'Manage banner') + '</button>' : '')
     + (section === 'owners' ? '<button data-owner-link="' + ownerLink + '">Copy owner login link</button>' : '') + '</div></article>';
 }
 
@@ -105,6 +109,8 @@ function dashboard() {
     stores:'Create stores and manage storefront availability.',
     owners:'Share each store’s direct login link. Owners need a Supabase account assigned to that store.',
     billing:'Apply a hold for overdue accounts and release it once payment is confirmed. Payment checks are manual.',
+    analytics:'Search for a store to view its recorded order activity and paid revenue.',
+    ads:'Manage the sponsored banner that appears above each store catalogue.',
     archive:'Restore deleted stores as closed before reopening them.'
   };
   app.innerHTML = '<div class="admin-layout"><aside class="panel admin-sidebar"><small>PLATFORM</small><strong>Main Admin</strong>'
@@ -114,6 +120,11 @@ function dashboard() {
     + (section === 'overview'
       ? '<div class="grid">' + metrics + '</div><div class="panel stack"><h2>Manage the platform</h2><div class="toolbar">'
         + '<button data-section="stores">Manage stores</button><button data-section="owners">Owner login links</button><button data-section="billing">Review billing holds</button></div></div>'
+      : section === 'security' ? '<div class="panel stack"><h2>Change password</h2><p class="muted">Passwords are managed by Supabase Auth.</p><form id="main-admin-password">'
+        + '<label>Current password<input name="current" type="password" autocomplete="current-password" required></label>'
+        + '<label>New password<input name="password" type="password" minlength="14" autocomplete="new-password" required></label>'
+        + '<label>Confirm new password<input name="confirm" type="password" minlength="14" autocomplete="new-password" required></label>'
+        + '<div><button class="primary">Update password</button></div><p role="status" id="password-result"></p></form></div>'
       : '<p class="muted">' + details[section] + '</p>'
         + (section === 'archive' ? '' : '<div class="toolbar"><input class="search" id="admin-store-search" type="search" aria-label="Search stores" placeholder="Search name, link or package" value="' + esc(storeQuery) + '">'
           + '<select id="admin-store-status" aria-label="Filter by store status"><option value="">All statuses</option>'
@@ -190,6 +201,39 @@ document.addEventListener('click', async event => {
     const status = target.dataset.metric;
     return changeSection(status === 'deleted' ? 'archive' : 'stores',status);
   }
+  if (target.dataset.analytics) {
+    const store = adminStores.find(item => item.id === target.dataset.analytics);
+    if (!store) return;
+    openDialog('Analytics · ' + store.name,'<p>Loading…</p>');
+    try {
+      const [stats] = await adminRequest('platform_store_analytics',{p_business:store.id});
+      if (!modal.open) return;
+      openDialog('Analytics · ' + store.name, '<p class="muted">All recorded orders</p><div class="split">'
+        + [['Orders',stats.order_count],['Paid orders',stats.paid_orders],['Paid revenue',money(Number(stats.paid_minor)/100)],['Cancelled',stats.cancelled_orders]]
+          .map(([label,value])=>'<div class="panel"><small>'+label+'</small><h2>'+esc(value)+'</h2></div>').join('') + '</div>');
+    } catch { if (modal.open) openDialog('Analytics','<p>Analytics could not be loaded.</p>'); }
+    return;
+  }
+  if (target.dataset.adSettings) {
+    const store = adminStores.find(item => item.id === target.dataset.adSettings);
+    if (!store) return;
+    openDialog('Advertising · ' + store.name,'<p>Loading…</p>');
+    try {
+      const rows = await request('/rest/v1/store_ad_settings?select=*&business_id=eq.' + store.id,{token:await getSessionToken()});
+      if (!modal.open) return;
+      const ad = rows[0] || {};
+      openDialog('Advertising · ' + store.name, '<form id="main-admin-ad" data-id="' + store.id + '">'
+        + '<label>Banner title<input name="title" maxlength="120" value="' + esc(ad.title) + '"></label>'
+        + '<label>Banner image URL<input name="image_url" type="url" placeholder="https://" value="' + esc(ad.image_url) + '"></label>'
+        + '<label>Destination URL<input name="destination_url" type="url" placeholder="https://" value="' + esc(ad.destination_url) + '"></label>'
+        + '<label><span><input name="enabled" type="checkbox" ' + (ad.enabled ? 'checked' : '') + '> Show this banner</span></label>'
+        + '<label>Ad-free fee (N$)<input name="fee" type="number" min="0" max="21474836.47" step=".01" value="' + ((ad.ad_free_fee_minor || 0)/100) + '" required></label>'
+        + '<label>Ad-free through<input name="until" type="date" value="' + esc(ad.ad_free_until) + '"></label>'
+        + '<small>Set the date after confirming payment. The banner stays hidden through that date, Namibia time.</small>'
+        + '<p id="admin-form-error" role="alert" hidden></p><button class="primary">Save advertising settings</button></form>');
+    } catch { if (modal.open) openDialog('Advertising','<p>Advertising settings could not be loaded.</p>'); }
+    return;
+  }
   if (target.dataset.ownerLink) {
     const link = target.dataset.ownerLink;
     try {
@@ -220,7 +264,7 @@ document.addEventListener('click', async event => {
 
 document.addEventListener('submit', async event => {
   const form = event.target;
-  if (!['main-admin-login','main-admin-create','main-admin-status'].includes(form.id)) return;
+  if (!['main-admin-login','main-admin-create','main-admin-status','main-admin-ad','main-admin-password'].includes(form.id)) return;
   event.preventDefault();
   const values = Object.fromEntries(new FormData(form));
   const button = form.querySelector('button[type=submit], button:not([type])');
@@ -228,8 +272,32 @@ document.addEventListener('submit', async event => {
   try {
     if (form.id === 'main-admin-login') {
       session(await request('/auth/v1/token?grant_type=password', {
-        method:'POST', data:{email:values.email.trim(),password:values.password}
+        method:'POST', data:{email:ownerSlug ? values.email.trim() : (values.email.trim().toLowerCase() === 'enuxespro' ? adminEmail : values.email.trim()),password:values.password}
       }));
+    } else if (form.id === 'main-admin-password') {
+      const status = document.getElementById('password-result');
+      try {
+        if (values.password !== values.confirm) throw new Error('The new passwords do not match.');
+        await getSessionToken();
+        const reauth = await request('/auth/v1/token?grant_type=password', {
+          method:'POST', data:{email:adminSession.user.email,password:values.current}
+        });
+        session(reauth);
+        await request('/auth/v1/user',{method:'PUT',token:reauth.access_token,data:{password:values.password}});
+        form.reset();
+        status.textContent = 'Password updated.';
+      } catch (error) { status.textContent = error.message; }
+      return;
+    } else if (form.id === 'main-admin-ad') {
+      if (values.enabled && !values.image_url) throw new Error('Add an image URL before enabling the banner.');
+      await request('/rest/v1/store_ad_settings?on_conflict=business_id',{
+        method:'POST', token:await getSessionToken(), prefer:'resolution=merge-duplicates',
+        data:{business_id:form.dataset.id,title:values.title,image_url:values.image_url,destination_url:values.destination_url,
+          enabled:Boolean(values.enabled),ad_free_fee_minor:Math.round(Number(values.fee)*100),ad_free_until:values.until || null}
+      });
+      modal.close();
+      toast('Advertising settings saved.');
+      return;
     } else if (form.id === 'main-admin-create') {
       await adminRequest('platform_create_business', {
         p_slug:values.slug, p_name:values.name, p_type:values.type,
@@ -294,6 +362,8 @@ async function boot() {
       ...p, businessId:p.business_id, price:p.price_minor/100, sale:p.sale_price_minor/100,
       image:/^https:\/\//i.test(p.image_url || '') ? p.image_url : ''
     }));
+    const ads = await request('/rest/v1/store_ad_settings?select=title,image_url,destination_url&business_id=eq.' + business.id).catch(()=>[]);
+    storeBanner = ads[0] || null;
     storefront();
   } catch { app.innerHTML = '<h2>Temporarily unavailable</h2><p>Refresh the page to try again.</p>'; }
 }
