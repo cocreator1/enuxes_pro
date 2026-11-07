@@ -16,6 +16,7 @@
 .main-admin .badge{background:#d9edf9;color:#23465c}
 .main-admin .notice{background:#fff0e5;color:#74310d}
 .main-admin button:focus-visible,.main-admin input:focus-visible,.main-admin select:focus-visible,.main-admin a:focus-visible{outline:3px solid #537f9c}
+.store-ad{margin:0 0 26px;padding:12px}.store-ad img{display:block;width:100%;max-height:240px;object-fit:contain;border-radius:8px}.store-ad small{display:block;margin-bottom:6px}
 </style></head><body><header><nav id="nav"></nav></header><main id="app"></main><footer>eNuxes · Commerce & hospitality <span class="muted"> / Demo workspace</span></footer><dialog id="modal"></dialog><div id="toast" role="status"></div>
 <script>
 'use strict';
@@ -32,6 +33,16 @@ const paths={
 
 const db={products:[]};
 let business;
+let storeBanner = null;
+function bannerHtml() {
+  const ad = storeBanner;
+  if (!ad || !/^https:\/\//i.test(ad.image_url)) return '';
+  const image = '<img loading="lazy" src="' + esc(ad.image_url) + '" alt="' + esc(ad.title || 'Sponsored advertisement') + '">';
+  return '<aside class="panel store-ad"><small>Sponsored</small>'
+    + (/^https:\/\//i.test(ad.destination_url) ? '<a href="' + esc(ad.destination_url) + '" rel="sponsored noreferrer">' + image + '</a>' : image)
+    + '</aside>';
+}
+
 let category='',query='';
 const app=document.getElementById('app'), modal=document.getElementById('modal'), nav=document.getElementById('nav');
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -43,7 +54,7 @@ function toast(message){const box=document.getElementById('toast');box.textConte
 function openDialog(title,body){modal.innerHTML='<div class="row"><h2>'+esc(title)+'</h2><button data-action="close" aria-label="Close">✕</button></div>'+body;if(!modal.open)modal.showModal()}
 function card(p,i){return '<article class="card"><div class="art" style="background:'+colors[i%4]+'">'+(p.image?'<img src="'+esc(p.image)+'" alt="'+esc(p.name)+'">':icon(p.art,['#1e2945','#42608a','#a9784d','#273a55'][i%4]))+(p.sale?'<span class="badge">Special</span>':'')+'</div><div class="cardbody"><small>'+esc(p.category)+'</small><h3>'+esc(p.name)+'</h3><div class="row"><span class="price">'+money(price(p))+(p.sale?' <del>'+money(p.price)+'</del>':'')+'</span><button aria-label="View '+esc(p.name)+'" data-action="product" data-id="'+p.id+'">View ↗</button></div></div></article>'}
 function filter(){document.getElementById('products').innerHTML=db.products.filter(p=>p.businessId===business.id&&p.active&&(!category||p.category===category)&&[p.name,p.category,p.description].join(' ').toLowerCase().includes(query.toLowerCase())).map(card).join('')||'<p>No matching items.</p>'}
-function storefront(){const categories=[...new Set(db.products.filter(p=>p.businessId===business.id&&p.active).map(p=>p.category))];app.innerHTML='<div class="crumb">Businesses / '+esc(business.name)+'</div><div class="hero"><section><span class="badge">'+(business.type==='RESTAURANT'?'MENU':'ONLINE STORE')+'</span><h1>'+esc(business.name)+'</h1><p>'+esc(business.description)+'</p><a class="button" href="#browse">'+(business.type==='RESTAURANT'?'Browse menu':'Shop collection')+' ↓</a></section><div class="hero-art">'+icon(business.type==='RESTAURANT'?'bowl':'bag','#bdd0ff')+'</div></div><div id="browse" class="row"><h2>'+(business.type==='RESTAURANT'?'Menu':'Shop products')+'</h2><input class="search" id="search" type="search" aria-label="Search products" placeholder="Search products" value="'+esc(query)+'"></div><div class="toolbar">'+['',...categories].map(c=>'<button class="'+(c===category?'active':'')+'" data-action="category" data-id="'+esc(c)+'">'+esc(c||'All products')+'</button>').join('')+'</div><div class="grid" id="products"></div>';filter()}
+function storefront(){const categories=[...new Set(db.products.filter(p=>p.businessId===business.id&&p.active).map(p=>p.category))];app.innerHTML='<div class="crumb">Businesses / '+esc(business.name)+'</div><div class="hero"><section><span class="badge">'+(business.type==='RESTAURANT'?'MENU':'ONLINE STORE')+'</span><h1>'+esc(business.name)+'</h1><p>'+esc(business.description)+'</p><a class="button" href="#browse">'+(business.type==='RESTAURANT'?'Browse menu':'Shop collection')+' ↓</a></section><div class="hero-art">'+icon(business.type==='RESTAURANT'?'bowl':'bag','#bdd0ff')+'</div></div>'+bannerHtml()+'<div id="browse" class="row"><h2>'+(business.type==='RESTAURANT'?'Menu':'Shop products')+'</h2><input class="search" id="search" type="search" aria-label="Search products" placeholder="Search products" value="'+esc(query)+'"></div><div class="toolbar">'+['',...categories].map(c=>'<button class="'+(c===category?'active':'')+'" data-action="category" data-id="'+esc(c)+'">'+esc(c||'All products')+'</button>').join('')+'</div><div class="grid" id="products"></div>';filter()}
 function product(id){const p=getProduct(id);if(!p?.active)return;openDialog(p.name,'<p>'+esc(p.description)+'</p><p class="price">'+money(price(p))+'</p>')}
 document.addEventListener('click', event => {
   const control = event.target.closest('[data-action]');
