@@ -327,7 +327,7 @@ document.addEventListener('submit', async event => {
 });
 
 async function boot() {
-  nav.innerHTML = '<a class="brand" href="/"><span>e</span>Nuxes</a><a href="/">Businesses</a>';
+  nav.innerHTML = '<a class="brand" href="/"><img src="/enuxes-logo.svg" width="34" height="34" alt="">eNuxes</a><a href="/">Businesses</a>';
   document.querySelector('footer').textContent = 'eNuxes · Commerce & hospitality';
   if (ownerSlug || location.pathname.replace(/\/$/,'') === adminPath) {
     app.innerHTML = '<p>Loading sign-in…</p>';
