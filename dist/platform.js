@@ -3,9 +3,14 @@ const apiRoot = 'https://ffuqqktvxkbazvzqkfac.supabase.co';
 const publicKey = 'sb_publishable_YQU0fJ9kVchMLMW-tjqenQ_gKGXnofM';
 const adminPath = '/mainadmin-pro';
 const storefrontRoot = 'https://www.enuxes.com';
-const sessionKey = 'enuxes-mainadmin-session';
+const ownerSlug = location.pathname.match(/^\/([a-z0-9]+(?:-[a-z0-9]+)*)\/owner\/?$/)?.[1];
+const sessionKey = ownerSlug ? 'enuxes-owner-session' : 'enuxes-mainadmin-session';
 let adminSession;
 let adminStores = [];
+let section = 'overview';
+let storeQuery = '';
+let storeStatus = '';
+const sections = {overview:'Overview',stores:'Stores',owners:'Owner access',billing:'Billing holds',archive:'Archive'};
 const businessColumns = 'id,slug,name,type,description,active';
 
 async function request(endpoint, { method = 'GET', data, token } = {}) {
@@ -32,20 +37,24 @@ function session(value) {
   else sessionStorage.removeItem(sessionKey);
 }
 
-async function adminRequest(name, args = {}) {
+async function getSessionToken() {
   if (!adminSession) throw new Error('Sign in to continue.');
   if (adminSession.expires_at <= Date.now() / 1000 + 30) {
     session(await request('/auth/v1/token?grant_type=refresh_token', {
       method: 'POST', data: { refresh_token: adminSession.refresh_token }
     }));
   }
+  return adminSession.access_token;
+}
+
+async function adminRequest(name, args = {}) {
   return request('/rest/v1/rpc/' + name, {
-    method: 'POST', token: adminSession.access_token, data: args
+    method: 'POST', token: await getSessionToken(), data: args
   });
 }
 
 function signIn(message = '') {
-  app.innerHTML = '<div class="panel" style="max-width:440px;margin:48px auto"><h2>Main Admin</h2>'
+  app.innerHTML = '<div class="panel" style="max-width:440px;margin:48px auto"><h2>' + (ownerSlug ? 'Store owner' : 'Main Admin') + '</h2>'
     + (message ? '<p class="notice" role="alert">' + esc(message) + '</p>' : '')
     + '<form id="main-admin-login"><label>Email<input name="email" type="email" autocomplete="username" required></label>'
     + '<label>Password<input name="password" type="password" autocomplete="current-password" required></label>'
@@ -53,26 +62,99 @@ function signIn(message = '') {
 }
 
 const labels = {active:'Active',closed:'Closed',on_hold:'On hold',deleted:'Archived'};
-function dashboard() {
-  const rows = adminStores.map(store => {
-    const link = storefrontRoot + '/' + store.slug;
-    const buttons = store.lifecycle === 'deleted'
-      ? [['closed','Restore as closed']]
-      : [['active','Activate'],['closed','Close'],['on_hold','Put on hold'],['deleted','Delete']].filter(([status]) => status !== store.lifecycle);
-    return '<article class="panel stack"><div class="row"><div><strong>' + esc(store.name) + '</strong><br>'
-      + '<small>' + esc(store.type.replaceAll('_',' ')) + ' · ' + esc(store.package || 'Starter') + '</small></div>'
-      + '<span class="badge">' + labels[store.lifecycle] + '</span></div>'
-      + (store.lifecycle === 'active' ? '<a href="' + link + '">' + link + ' ↗</a>' : '<small>' + link + '</small>')
-      + (store.status_reason ? '<small>' + esc(store.status_reason) + '</small>' : '')
-      + '<div class="toolbar">' + buttons.map(([status,label]) =>
-        '<button data-business-status="' + status + '" data-business-id="' + store.id + '">' + label + '</button>').join('') + '</div></article>';
-  }).join('');
-  app.innerHTML = '<div class="stack"><div class="row"><h2>Main Admin · Stores</h2><div class="toolbar">'
-    + '<button class="primary" id="create-business">Create store</button><button id="admin-signout">Sign out</button></div></div>'
-    + (rows || '<div class="panel">No stores yet. Select Create store to add one.</div>') + '</div>';
+function storeCard(store) {
+  const link = storefrontRoot + '/' + store.slug;
+  const ownerLink = link + '/owner';
+  let buttons = store.lifecycle === 'deleted'
+    ? [['closed','Restore as closed']]
+    : [['active','Activate'],['closed','Close'],['on_hold','Put on hold'],['deleted','Delete']].filter(([status]) => status !== store.lifecycle);
+  if (section === 'billing') buttons = store.lifecycle === 'on_hold'
+    ? [['active','Release hold'],['closed','Release as closed']]
+    : [['on_hold','Put on hold']];
+  if (section === 'owners') buttons = [];
+  return '<article class="panel stack"><div class="row"><div><strong>' + esc(store.name) + '</strong><br>'
+    + '<small>' + esc(store.type.replaceAll('_',' ')) + ' · ' + esc(store.package || 'Starter') + '</small></div>'
+    + '<span class="badge">' + labels[store.lifecycle] + '</span></div>'
+    + (store.lifecycle === 'active' ? '<a href="' + link + '">' + link + ' ↗</a>' : '<small>' + link + '</small>')
+    + (store.status_reason ? '<small>' + esc(store.status_reason) + '</small>' : '')
+    + '<div class="toolbar">' + buttons.map(([status,label]) =>
+      '<button data-business-status="' + status + '" data-business-id="' + store.id + '">' + label + '</button>').join('')
+    + (section === 'owners' ? '<button data-owner-link="' + ownerLink + '">Copy owner login link</button>' : '') + '</div></article>';
 }
 
+function renderStoreRows() {
+  const target = document.getElementById('admin-store-rows');
+  if (!target) return;
+  const query = storeQuery.trim().toLowerCase();
+  const rows = adminStores.filter(store => {
+    if (section === 'archive') return store.lifecycle === 'deleted';
+    if (store.lifecycle === 'deleted') return false;
+    return (!storeStatus || store.lifecycle === storeStatus)
+      && (!query || [store.name,store.slug,store.package].some(value => String(value ?? '').toLowerCase().includes(query)));
+  });
+  target.innerHTML = rows.map(storeCard).join('') || '<div class="panel">No matching stores.</div>';
+}
+
+function dashboard() {
+  const metrics = Object.entries(labels).map(([status,label]) =>
+    '<button class="panel admin-metric" data-metric="' + status + '"><small>' + label + '</small><strong>'
+    + adminStores.filter(store => store.lifecycle === status).length + '</strong></button>').join('');
+  const navItems = Object.entries(sections).map(([id,label]) =>
+    '<button data-section="' + id + '" ' + (id === section ? 'class="active" aria-current="page"' : '') + '>' + label + '</button>').join('');
+  const details = {
+    stores:'Create stores and manage storefront availability.',
+    owners:'Share each store’s direct login link. Owners need a Supabase account assigned to that store.',
+    billing:'Apply a hold for overdue accounts and release it once payment is confirmed. Payment checks are manual.',
+    archive:'Restore deleted stores as closed before reopening them.'
+  };
+  app.innerHTML = '<div class="admin-layout"><aside class="panel admin-sidebar"><small>PLATFORM</small><strong>Main Admin</strong>'
+    + '<div class="admin-sections" aria-label="Main Admin sections">' + navItems + '</div></aside><section class="stack">'
+    + '<div class="row"><div><small>ENUXES ADMINISTRATION</small><h2>' + sections[section] + '</h2></div><div class="toolbar">'
+    + '<button class="primary" id="create-business">Create store</button><button id="admin-signout">Sign out</button></div></div>'
+    + (section === 'overview'
+      ? '<div class="grid">' + metrics + '</div><div class="panel stack"><h2>Manage the platform</h2><div class="toolbar">'
+        + '<button data-section="stores">Manage stores</button><button data-section="owners">Owner login links</button><button data-section="billing">Review billing holds</button></div></div>'
+      : '<p class="muted">' + details[section] + '</p>'
+        + (section === 'archive' ? '' : '<div class="toolbar"><input class="search" id="admin-store-search" type="search" aria-label="Search stores" placeholder="Search name, link or package" value="' + esc(storeQuery) + '">'
+          + '<select id="admin-store-status" aria-label="Filter by store status"><option value="">All statuses</option>'
+          + Object.entries(labels).filter(([status]) => status !== 'deleted').map(([status,label]) => '<option value="' + status + '" ' + (storeStatus === status ? 'selected' : '') + '>' + label + '</option>').join('') + '</select></div>')
+        + '<div class="stack" id="admin-store-rows"></div>')
+    + '</section></div>';
+  renderStoreRows();
+}
+
+function changeSection(next, status = '') {
+  if (!Object.hasOwn(sections,next)) return;
+  section = next;
+  storeQuery = '';
+  storeStatus = status;
+  dashboard();
+}
+
+document.addEventListener('input', event => {
+  if (event.target.id === 'admin-store-search') {
+    storeQuery = event.target.value;
+    renderStoreRows();
+  }
+});
+document.addEventListener('change', event => {
+  if (event.target.id === 'admin-store-status') {
+    storeStatus = event.target.value;
+    renderStoreRows();
+  }
+});
+
 async function refreshDashboard() {
+  if (ownerSlug) {
+    const token = await getSessionToken();
+    const memberships = await request('/rest/v1/business_members?select=businesses!inner(' + businessColumns + ')&businesses.slug=eq.' + ownerSlug, {token});
+    const store = memberships[0]?.businesses;
+    if (!store) throw new Error('This account has no access to this store.');
+    app.innerHTML = '<div class="panel stack"><div class="row"><h2>' + esc(store.name) + '</h2><button id="admin-signout">Sign out</button></div>'
+      + '<p>Storefront is ' + (store.active ? 'active.' : 'unavailable to customers.') + '</p>'
+      + (store.active ? '<a href="/' + store.slug + '">View storefront ↗</a>' : '<p>Contact eNuxes support for help reopening your store.</p>') + '</div>';
+    return;
+  }
   adminStores = await adminRequest('platform_business_list');
   dashboard();
 }
@@ -100,9 +182,24 @@ function showCreate() {
 }
 
 document.addEventListener('click', async event => {
-  if (location.pathname.replace(/\/$/,'') !== adminPath) return;
+  if (!ownerSlug && location.pathname.replace(/\/$/,'') !== adminPath) return;
   const target = event.target.closest('button');
   if (!target) return;
+  if (target.dataset.section) return changeSection(target.dataset.section);
+  if (target.dataset.metric) {
+    const status = target.dataset.metric;
+    return changeSection(status === 'deleted' ? 'archive' : 'stores',status);
+  }
+  if (target.dataset.ownerLink) {
+    const link = target.dataset.ownerLink;
+    try {
+      await navigator.clipboard.writeText(link);
+      toast('Owner login link copied.');
+    } catch {
+      openDialog('Owner login link','<label>Copy this link<input readonly value="' + esc(link) + '"></label>');
+    }
+    return;
+  }
   if (target.id === 'create-business') showCreate();
   if (target.id === 'admin-signout') {
     const token = adminSession?.access_token;
@@ -138,6 +235,8 @@ document.addEventListener('submit', async event => {
         p_slug:values.slug, p_name:values.name, p_type:values.type,
         p_package:values.package, p_description:values.description.trim(), p_active:Boolean(values.active)
       });
+      section = 'stores';
+      storeQuery = storeStatus = '';
       modal.close();
     } else {
       await adminRequest('platform_set_business_status', {
@@ -162,8 +261,8 @@ document.addEventListener('submit', async event => {
 async function boot() {
   nav.innerHTML = '<a class="brand" href="/"><span>e</span>Nuxes</a><a href="/">Businesses</a>';
   document.querySelector('footer').textContent = 'eNuxes · Commerce & hospitality';
-  if (location.pathname.replace(/\/$/,'') === adminPath) {
-    app.innerHTML = '<p>Loading Main Admin…</p>';
+  if (ownerSlug || location.pathname.replace(/\/$/,'') === adminPath) {
+    app.innerHTML = '<p>Loading sign-in…</p>';
     try {
       adminSession = JSON.parse(sessionStorage.getItem(sessionKey) || 'null');
       if (adminSession) await refreshDashboard();
