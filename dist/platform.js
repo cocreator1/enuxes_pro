@@ -501,7 +501,7 @@ async function renderOwnerTab() {
     }
     const [theme]=await request('/rest/v1/store_themes?select=accent'+byStore,{token});
     settingsTarget.innerHTML='<div class="panel"><h2>Store appearance</h2><form id="owner-theme"><label>Store accent<input name="accent" type="color" value="'+esc(theme?.accent||'#166047')+'"></label><div><button class="primary">Save colour</button></div><p role="status"></p></form></div>';
-    return;
+    return ownerCheckoutSettings(settingsTarget,token);
   }
   if (['Products','Store builder'].includes(tab)) return ownerEditor(tab,target,token);
   const [orders,stock] = await Promise.all([
