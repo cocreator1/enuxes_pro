@@ -481,7 +481,7 @@ async function boot() {
       return;
     }
     business = stores[0];
-    const products = await request('/rest/v1/products?select=id,business_id,name,category,description,image_url,price_minor,sale_price_minor,active&active=eq.true&business_id=eq.' + business.id);
+    const products = await request('/rest/v1/products?select=id,business_id,name,category,description,image_url,price_minor,sale_price_minor,gallery,sizes,colours,stock,active&active=eq.true&business_id=eq.' + business.id);
     db.products = products.map(p => ({
       ...p, businessId:p.business_id, price:p.price_minor/100, sale:p.sale_price_minor/100,
       image:/^https:\/\//i.test(p.image_url || '') ? p.image_url : ''
@@ -491,7 +491,7 @@ async function boot() {
     const [theme] = await request('/rest/v1/store_themes?select=accent&business_id=eq.' + business.id).catch(()=>[]);
     applyStoreTheme(theme?.accent);
     publishedContent = await contentFor(business.id).catch(()=>null);
-    storefront();
+    await startShop();
   } catch { app.innerHTML = '<h2>Temporarily unavailable</h2><p>Refresh the page to try again.</p>'; }
 }
 
