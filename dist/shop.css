@@ -150,3 +150,5 @@ dialog.owner-edit-sheet{position:fixed;inset:0 0 0 auto;margin:0;width:min(520px
 .shop-tabs .visual-slot>.visual-dots{position:absolute;inset:auto 0 100% auto;min-height:32px}
 .shop-tabs .visual-slot>a{display:grid;justify-items:center;align-content:center;gap:3px;min-height:50px;font-size:12px}
 .visual-store-price{display:flex;justify-content:flex-end;align-items:center;gap:.3rem;font-size:.8rem}
+.visual-save-status{flex-basis:100%;margin:0;font-size:.85rem;overflow-wrap:anywhere}
+.visual-save-status:empty{display:none}
