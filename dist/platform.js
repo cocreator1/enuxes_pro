@@ -408,7 +408,7 @@ async function renderOwnerTab() {
   }
   if(tab==='Home Layout')return ownerHomeLayout(target,token);
   if(tab==='Ready to Publish')return renderDraftChecklist(target,token);
-  if(tab==='My Store')return store.demo_pack?renderSharedOwnerPreview(target):ownerStorePreview(target,token);
+  if(tab==='My Store')return renderSharedOwnerPreview(target);
   if (tab==='Profile') {
     target.innerHTML='<section class="panel stack"><h2>Profile</h2><p>Manage your store identity, appearance, password and support.</p><div class="toolbar">'
       +ownerProfileTabs.map(label=>'<button data-owner-tab="'+label+'">'+label+'</button>').join('')+'</div></section>';
