@@ -51,3 +51,42 @@ function renderSharedOwnerPreview(target){
   +(store.active?'<a class="button" href="/'+esc(store.slug)+'">View live store ↗</a>':store.owner_published_at?'':'<button class="primary" data-owner-tab="Ready to Publish">Ready to Publish</button>')+'</div>'
   +'<iframe class="draft-store-preview" title="Storefront preview" src="/'+esc(store.slug)+'?owner-preview=1"></iframe>';
 }
+
+function canEditInlineStore(){
+ return storefrontPreview&&Boolean(business?.demo_pack);
+}
+
+function inlineEditButton(kind,id,label){
+ return canEditInlineStore()?'<button type="button" data-inline-edit="'+kind+'" data-inline-id="'+esc(id)+'">'+label+'</button>':'';
+}
+
+async function reloadInlineStore(){
+ const snapshot=await readStorefront(business.slug);
+ if(!snapshot)throw new Error('Store access is unavailable.');
+ applyStorefront(snapshot);
+ ownerStore=business;
+ renderShop();
+ toast('Saved.');
+}
+
+app.addEventListener('click',event=>{
+ const button=event.target.closest('[data-inline-edit],[data-inline-cancel]');
+ if(!button||!canEditInlineStore())return;
+ const open=app.querySelector('.inline-store-editor');
+ if(button.hasAttribute('data-inline-cancel')){
+  if(!open.querySelector('form button:disabled,[data-save-layout]:disabled'))open.remove();
+  return;
+ }
+ if(open){open.scrollIntoView({block:'nearest'});return;}
+ const editor=document.createElement('section');
+ editor.className='inline-store-editor panel stack';
+ const {inlineEdit:kind,inlineId:id}=button.dataset;
+ const anchor=button.closest('.shop-card,[data-home-section],.shop-heading');
+ if(!anchor)return;
+ ownerStore=business;
+ anchor.after(editor);
+ if(kind==='sections')layoutEditor(editor,publishedContent,reloadInlineStore);
+ else editor.innerHTML=kind==='profile'?profileForm(business,publishedContent):productForm(id?getProduct(id):undefined);
+ editor.insertAdjacentHTML('afterbegin','<div class="row"><strong>'+button.textContent+'</strong><button type="button" data-inline-cancel>Cancel</button></div>');
+ editor.scrollIntoView({block:'nearest'});
+});
