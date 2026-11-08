@@ -86,7 +86,7 @@ app.addEventListener('click',event=>{
  ownerStore=business;
  anchor.after(editor);
  if(kind==='sections')layoutEditor(editor,publishedContent,reloadInlineStore);
- else editor.innerHTML=kind==='profile'?profileForm(business,publishedContent):productForm(id?getProduct(id):undefined);
+ else editor.innerHTML=kind==='profile'?profileForm(business,publishedContent):productForm(id?getProduct(id):undefined,true);
  editor.insertAdjacentHTML('afterbegin','<div class="row"><strong>'+button.textContent+'</strong><button type="button" data-inline-cancel>Cancel</button></div>');
  editor.scrollIntoView({block:'nearest'});
 });
