@@ -72,6 +72,12 @@ body.workspace {background:#fff}
   .workspace .admin-sections button {flex:0 0 auto;min-height:44px;padding-inline:12px}
   .workspace input,.workspace select,.workspace textarea {font-size:16px;min-width:0}
 }
+.owner-preview{width:min(100%,520px);background:#f8faf6;border:1px solid var(--border);border-radius:20px;overflow:hidden}
+.owner-preview-content{padding:15px;min-height:280px}
+.owner-preview .shop-tabs{position:static;width:100%;transform:none;border-radius:0;padding-bottom:5px}
+.owner-preview .shop-photo img,.owner-preview .shop-photo svg{max-height:200px}
+.owner-profile-back{justify-self:start}
+@media(max-width:760px){.owner-preview-content{padding:11px}.owner-preview .shop-tabs button{min-height:48px}}
 </style><link rel="stylesheet" href="/shop.css"></head><body><header><nav id="nav"></nav></header><main id="app"></main><footer>eNuxes · Commerce & hospitality <span class="muted"> / Demo workspace</span></footer><dialog id="modal"></dialog><div id="toast" role="status"></div>
 <script>
 'use strict';
