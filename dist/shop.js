@@ -85,6 +85,12 @@ function renderShop(){
 
 function detail(id){
  const p=getProduct(id);if(!p)return;
+ if(canEditInlineStore()){
+  ownerStore=business;
+  modal.className='shop-detail';
+  openDialog('Edit product','<div class="inline-store-editor">'+productForm(p,true)+'</div>');
+  return;
+ }
  const options=(name,list)=>list?.length?'<fieldset><legend>'+name+'</legend><div class="shop-options">'+list.map((option,i)=>'<label><input type="radio" name="'+name+'" value="'+esc(option)+'" '+(i?'':'checked')+'><span>'+esc(option)+'</span></label>').join('')+'</div></fieldset>':'';
  const photos=[p.image,...(Array.isArray(p.gallery)?p.gallery:[])].filter(safeImage);
  modal.className='shop-detail';
