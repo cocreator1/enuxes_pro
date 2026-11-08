@@ -232,7 +232,7 @@ document.addEventListener('submit',async event=>{
     }
     if(form.closest('.inline-store-editor')){await reloadInlineStore();modal.close();return;}
     status.textContent='Saved.';
-  }catch(error){status.textContent=error.message;if(form.closest('.inline-store-editor'))markOwnerEditor('Unsaved changes');}finally{button.disabled=false;}
+  }catch(error){status.textContent=error.message;}finally{button.disabled=false;}
 });
 
 async function openLayoutLimit(id){
@@ -470,7 +470,7 @@ async function trendoraMerchEditor(target,token){
     collections:configured.sort((a,b)=>a.position-b.position)
    }},await getSessionToken());
    status.textContent='Saved. The storefront will refresh automatically.';
-  }catch(error){status.textContent=error.message;if(form.closest('.inline-store-editor'))markOwnerEditor('Unsaved changes');}finally{button.disabled=false;}
+  }catch(error){status.textContent=error.message;}finally{button.disabled=false;}
  };
 }
 
@@ -486,7 +486,7 @@ async function trendoraDeliveryEditor(target,token){
    const rows=await request('/rest/v1/business_settings?business_id=eq.'+ownerStore.id,{method:'PATCH',token:await getSessionToken(),prefer:'return=representation',data:{delivery_enabled:data.has('enabled'),delivery_fee_minor:Math.round(Number(data.get('fee'))*100)}});
    if(rows?.length!==1)throw new Error('Delivery settings were not saved.');
    status.textContent='Delivery settings saved.';
-  }catch(error){status.textContent=error.message;if(form.closest('.inline-store-editor'))markOwnerEditor('Unsaved changes');}finally{button.disabled=false;}
+  }catch(error){status.textContent=error.message;}finally{button.disabled=false;}
  };
 }
 
@@ -504,5 +504,5 @@ document.addEventListener('submit',async event=>{
   const rows=await request('/rest/v1/orders?id=eq.'+form.dataset.trendoraOrder+'&business_id=eq.'+ownerStore.id,{method:'PATCH',token:await getSessionToken(),prefer:'return=representation',data:{status:new FormData(form).get('status')}});
   if(rows?.length!==1)throw new Error('Order status was not saved.');
   status.textContent='Order status saved.';
- }catch(error){status.textContent=error.message;if(form.closest('.inline-store-editor'))markOwnerEditor('Unsaved changes');}finally{button.disabled=false;}
+ }catch(error){status.textContent=error.message;}finally{button.disabled=false;}
 });
