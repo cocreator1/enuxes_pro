@@ -116,7 +116,7 @@ function visualButton(key,label,destination,icon=''){
  const setting=visualSetting(key);
  const target=Object.hasOwn(visualDestinations,setting.destination)?setting.destination:destination;
  const title=setting.label||label;
- const style=' style="'+visualPaint(setting)+'"';
+ const style=' style="'+visualPaint({...visualSetting('button-default'),...setting})+'"';
  const control=target==='link'&&safeImage(setting.url)
   ?'<a class="visual-action" href="'+esc(setting.url)+'"'+style+'>'+icon+'<span>'+esc(title)+'</span></a>'
   :'<button data-shop-page="'+(target==='link'?destination:target)+'" '+(shopPage===target?'aria-current="page"':'')+style+'>'+icon+'<span>'+esc(title)+'</span></button>';
@@ -134,7 +134,7 @@ app.addEventListener('click',event=>{
  const product=key.startsWith('price:')?getProduct(key.slice(6)):null;
  const heading=key.startsWith('heading:');
  const config=visualSetting(key);
- const defaults=badge?visualSetting('price-default'):{};
+ const defaults=visualSetting(badge?'price-default':'button-default');
  const colour=[config.colour,defaults.colour].find(v=>/^#[0-9a-f]{6}$/i.test(v||''))||'#ffffff';
  const label=button.getAttribute('aria-label').slice(5);
  const destination=config.destination||key.split(':')[1];
@@ -144,6 +144,7 @@ app.addEventListener('click',event=>{
   +(!badge?'<label>'+ (heading?'Heading':'Button name')+'<input name="label" maxlength="80" value="'+esc(config.label||label)+'" required></label>':'')
   +(heading?'':'<label>Colour picker<input name="picker" type="color" value="'+colour+'"></label><label>Hex colour<input name="colour" pattern="#[0-9a-fA-F]{6}" value="'+colour+'" required></label><label>Opacity <output>'+esc(config.opacity??defaults.opacity??100)+'%</output><input name="opacity" type="range" min="0" max="100" value="'+esc(config.opacity??defaults.opacity??100)+'"></label>')
   +(!badge&&!heading?'<label>Navigate to<select name="destination">'+Object.entries(visualDestinations).map(([value,name])=>'<option value="'+value+'" '+(value===destination?'selected':'')+'>'+name+'</option>').join('')+'</select></label><label>External link<input name="url" type="url" maxlength="500" placeholder="https://" value="'+esc(config.url||'')+'"></label>':'')
+  +(!heading?'<label class="visual-apply-all"><span><input type="checkbox" name="applyAll"> Change for all</span><small>Apply this colour and opacity to all '+(badge?'price badges':'configurable buttons')+' in this store.</small></label>':'')
   +'<div class="owner-editor-actions"><p class="visual-save-status" role="status" aria-live="polite"></p><button type="submit" class="primary">Save Changes</button>'+(badge?'<button type="button" data-visual-reset>'+(product?'Reset to Store Default':'Reset Colour')+'</button>':'')+'</div></form>');
  const form=modal.querySelector('#visual-settings');
  const fields=form.elements;
@@ -177,7 +178,20 @@ app.addEventListener('click',event=>{
    const token=await getSessionToken();
    const {merchandising={}}=await contentFor(business.id,token);
    const visual={...merchandising.visual};
-   if(reset)delete visual[key];else visual[key]=value;
+   if(!reset&&badge&&data.has('applyAll')){
+    visual['price-default']=value;
+    for(const id of Object.keys(visual))if(id.startsWith('price:'))delete visual[id];
+   }else if(!reset&&!heading&&data.has('applyAll')){
+    visual['button-default']={colour,opacity:value.opacity};
+    for(const [id,setting] of Object.entries(visual)){
+     if(!id.startsWith('nav:')&&!id.startsWith('button:'))continue;
+     const {colour:previousColour,opacity:previousOpacity,...other}=setting;
+     visual[id]=other;
+    }
+    const {colour:sharedColour,opacity:sharedOpacity,...other}=value;
+    visual[key]=other;
+   }else if(reset)delete visual[key];
+   else visual[key]=value;
    const saved=await updateContent(business.id,{merchandising:{...merchandising,visual}},token);
    publishedContent=saved;
    signalStorefrontSave(business.slug);
