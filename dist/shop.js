@@ -29,7 +29,7 @@ function showCheckout(lines,key,buyNow=false){
 
 const cartKey=()=> 'enuxes-shop-'+business.id;
 function loadSaved(key,fallback){try{return JSON.parse(localStorage.getItem(key))??fallback;}catch{return fallback;}}
-function saveShop(){try{localStorage.setItem(cartKey(),JSON.stringify({cart:shopCart,fav:shopFav,request:shopRequest}));}catch{}}
+function saveShop(){if(savedStorePreview)return;try{localStorage.setItem(cartKey(),JSON.stringify({cart:shopCart,fav:shopFav,request:shopRequest}));}catch{}}
 const shopItems=()=>db.products.filter(p=>p.active);
 function shopPicture(p){return imageTag(p.image||safeImage(p.gallery?.[0]),p.name)||icon('bag','var(--shop-ink,#166047)');}
 function shopPrice(p){return '<strong>'+(business.demo_pack&&p.price_minor===0?'N$0-00':money(price(p)))+'</strong>'+(p.sale?'<del>'+money(p.price)+'</del>':'');}
@@ -114,7 +114,7 @@ function detail(id){
   +'<form id="shop-item" data-id="'+p.id+'"><div class="row"><h2>'+esc(p.name)+'</h2><button type="button" data-fav="'+p.id+'" aria-label="Favourite" aria-pressed="'+shopFav.includes(p.id)+'">'+shopIcon('heart')+'</button></div><div class="shop-detail-price">'+shopPrice(p)+'</div>'
   +options('Colour',p.colours)+options('Size',p.sizes)
   +'<label>Quantity <div class="shop-step"><button type="button" data-detail-step="-1" aria-label="Decrease quantity">−</button><input name="quantity" type="number" min="1" max="'+Math.min(99,p.stock??99)+'" value="1" aria-label="Quantity" required><button type="button" data-detail-step="1" aria-label="Increase quantity">+</button></div></label>'
-  +'<p>'+esc(p.description)+'</p>'+(storefrontPreview?'<p>Ordering is disabled in preview.</p>':p.stock===0?'<p>Out of stock</p>':'<div class="shop-cta"><button value="add">Add to Cart</button><button class="primary" value="buy">Buy Now</button></div>')+'</form>');
+  +'<p>'+esc(p.description)+'</p>'+(storefrontPreview&&!savedStorePreview?'<p>Ordering is disabled in preview.</p>':p.stock===0?'<p>Out of stock</p>':'<div class="shop-cta"><button value="add">Add to Cart</button>'+(savedStorePreview?'<button type="button" disabled>Buy Now</button>':'<button class="primary" value="buy">Buy Now</button>')+'</div>')+'</form>');
 }
 
 function showCart(){
@@ -125,7 +125,7 @@ function showCart(){
  +'<div class="shop-total"><div class="row"><span>Subtotal</span>'+money(subtotal)+'</div><div class="row"><span>'+(isTrendora()?'Delivery fee':'Collection fee')+'</span>'+money((fee||0)/100)+'</div>'
  +(!isTrendora()&&shopInfo.delivery_fee!=null?'<div class="row muted"><span>Delivery estimate (separate)</span>'+money(shopInfo.delivery_fee/100)+'</div>':'')
  +'<div class="row"><strong>Total</strong><strong>'+money(subtotal+(fee||0)/100)+'</strong></div></div>'
- +(shopInfo.collection?'<button class="primary shop-checkout" data-shop-checkout>Checkout</button>':'<p class="notice">Collection checkout is unavailable for this store.</p>'):'<p>Your cart is empty.</p>');
+ +(savedStorePreview?'<p class="notice">Checkout is disabled in preview.</p>':shopInfo.collection?'<button class="primary shop-checkout" data-shop-checkout>Checkout</button>':'<p class="notice">Collection checkout is unavailable for this store.</p>'):'<p>Your cart is empty.</p>');
 }
 
 async function loadShopInfo(follow){
@@ -136,7 +136,7 @@ async function startShop(){
  document.body.classList.add('customer-shop');
  if(isTrendora())document.body.classList.add('trendora-shop');
  document.querySelector('meta[name="viewport"]').content='width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover';
- const saved=loadSaved(cartKey(),{});
+ const saved=savedStorePreview?{}:loadSaved(cartKey(),{});
  shopCart=(Array.isArray(saved.cart)?saved.cart:[]).filter(line=>getProduct(line?.id)&&Number.isInteger(line.quantity)&&line.quantity>0&&line.quantity<=99);
  shopFav=Array.isArray(saved.fav)?saved.fav:[];
  shopRequest=saved.request||crypto.randomUUID();
@@ -205,7 +205,7 @@ document.addEventListener('click',async event=>{
  if(!document.body.classList.contains('customer-shop'))return;
  const button=event.target.closest('button');if(!button)return;
  const d=button.dataset;
- if(d.shopPage){if(d.shopPage==='cart')return storefrontPreview?openDialog('Cart preview','<p>Orders are disabled in this preview.</p>'):showCart();shopSearch=shopFilter='';shopOnlySale=shopOnlyFav=false;return changeShop(d.shopPage);}
+ if(d.shopPage){if(d.shopPage==='cart')return storefrontPreview&&!savedStorePreview?openDialog('Cart preview','<p>Orders are disabled in this preview.</p>'):showCart();shopSearch=shopFilter='';shopOnlySale=shopOnlyFav=false;return changeShop(d.shopPage);}
  if(d.item)return detail(d.item);
  if(d.fav){
   shopFav=shopFav.includes(d.fav)?shopFav.filter(id=>id!==d.fav):[...shopFav,d.fav];saveShop();
@@ -240,12 +240,12 @@ document.addEventListener('input',event=>{
 document.addEventListener('change',event=>{if(event.target.id==='shop-category'){shopFilter=event.target.value;shopOnlySale=false;if(shopPage==='home')changeShop('shop');else renderShop();}if(event.target.id==='shop-sort'){shopSort=event.target.value;updateShopGrid();}});
 document.addEventListener('submit',async event=>{
  const form=event.target;if(!['shop-item','shop-order'].includes(form.id))return;
- event.preventDefault();if(storefrontPreview)return;const fields=new FormData(form);
+ event.preventDefault();if(storefrontPreview&&(!savedStorePreview||form.id!=='shop-item'))return;const fields=new FormData(form);
  if(form.id==='shop-item'){
   const p=getProduct(form.dataset.id);if(!p)return;
   try{
    const selection={size:fields.get('Size'),colour:fields.get('Colour')},quantity=Number(fields.get('quantity'));
-   if(event.submitter?.value==='buy'){
+   if(!storefrontPreview&&event.submitter?.value==='buy'){
     if(!Number.isInteger(quantity)||quantity<1||quantity>maxShopQuantity(p))throw new Error('That quantity is unavailable.');
     showCheckout([{id:p.id,...selection,quantity}],crypto.randomUUID(),true);
    }else{addShopLine(p,selection,quantity);renderShop();modal.close();toast('Added to cart');}
