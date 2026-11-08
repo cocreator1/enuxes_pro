@@ -37,7 +37,7 @@
 @media(max-width:760px){.workspace .admin-layout{grid-template-columns:1fr;gap:13px}.workspace .admin-sidebar{position:static}.workspace-brand{max-width:190px;margin-bottom:5px}.workspace .admin-sections{display:flex;flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px}.workspace .admin-sections button{white-space:nowrap}.workspace .workspace-top{padding:13px}.workspace .toolbar{margin:5px 0}.workspace .admin-metric strong{font-size:26px}}
 .workspace progress{width:100%;height:10px;accent-color:#2869b1}
 .media-drop{border:1px dashed #91a7b6;padding:12px;border-radius:10px}.builder-photos{display:flex;gap:8px;flex-wrap:wrap}.builder-photos img,#owner-profile img,#owner-product img{width:90px;height:90px;object-fit:contain}.builder-photos button{padding:4px 8px}.store-media,.store-copy{margin:20px 0}.store-copy{white-space:pre-wrap;overflow-wrap:anywhere}.store-media img{display:block;max-width:100%;max-height:440px;margin:auto;object-fit:contain}.store-slides{display:flex;gap:14px;overflow:auto;scroll-snap-type:x mandatory}.store-slides img{flex:0 0 100%;width:100%;scroll-snap-align:center}.store-logo img{width:80px;height:80px;object-fit:contain;border-radius:50%;background:white}
-</style></head><body><header><nav id="nav"></nav></header><main id="app"></main><footer>eNuxes · Commerce & hospitality <span class="muted"> / Demo workspace</span></footer><dialog id="modal"></dialog><div id="toast" role="status"></div>
+</style><link rel="stylesheet" href="/shop.css"></head><body><header><nav id="nav"></nav></header><main id="app"></main><footer>eNuxes · Commerce & hospitality <span class="muted"> / Demo workspace</span></footer><dialog id="modal"></dialog><div id="toast" role="status"></div>
 <script>
 'use strict';
 if (/^\/mainadmin-pro\/?$/.test(location.pathname)) document.body.classList.add('main-admin');
@@ -87,4 +87,4 @@ document.addEventListener('click', event => {
 document.addEventListener('input', event => {
   if (event.target.id === 'search') { query = event.target.value; filter(); }
 });
-</script><script src="/builder.js"></script><script src="/platform.js"></script></body></html>
+</script><script src="/builder.js"></script><script src="/shop.js"></script><script src="/platform.js"></script></body></html>
