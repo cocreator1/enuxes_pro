@@ -84,8 +84,13 @@ function productEditor(product={}){
   openDialog(product.id?'Edit product':'Add product',productForm(product));
 }
 
-function productForm(product={}){
-  return '<form id="owner-product" data-id="'+(product.id||'')+'">'
+function productForm(product={},inPlace=false){
+  const media=uploadField('photo',true)+'<small>Select up to 10 photos to replace the gallery. The first is the cover.</small>';
+  const photos=[product.image_url,...(product.gallery||[])].filter(safeImage);
+  const imagePicker='<div class="shop-detail-photo inline-product-photo">'+(imageTag(photos[0],product.name)||icon('bag'))+uploadField('photo',true).replace('Drop images here or browse','<span aria-hidden="true">+</span> <span>Add or replace photos</span>')+'</div>'
+    +(photos.length>1?'<div class="shop-thumbs">'+photos.slice(1).map(url=>imageTag(url,'Product gallery photo')).join('')+'</div>':'')
+    +'<small>Select up to 10 photos. The first is the cover.</small>';
+  return '<form id="owner-product" data-id="'+(product.id||'')+'">'+(inPlace?imagePicker:'')
     +field('Product name','name',product.name,100,'text',true)+field('Category','category',product.category,80,'text',true)
     +'<label>Description<textarea name="description" maxlength="1000">'+esc(product.description)+'</textarea></label>'
     +'<label>Price (N$)<input name="price" type="number" min=".01" max="21474836.47" step=".01" required value="'+(product.price_minor==null?'':product.price_minor/100)+'"></label>'
@@ -93,7 +98,7 @@ function productForm(product={}){
     +field('Sizes (comma separated)','sizes',product.sizes?.join(', '),240)
     +field('Colours (comma separated)','colours',product.colours?.join(', '),240)
     +'<label>Stock (blank if untracked)<input name="stock" type="number" min="0" max="2147483647" step="1" value="'+esc(product.stock)+'"></label>'
-    +imageTag(product.image_url,'Current product photo')+uploadField('photo',true)+'<small>Select up to 10 photos to replace the gallery. The first is the cover.</small>'
+    +(inPlace?'':imageTag(product.image_url,'Current product photo')+media)
     +'<label><span><input type="checkbox" name="active" '+(product.active===false?'':'checked')+'> Show in catalogue</span></label>'
     +'<button class="primary">Save product</button><p role="status"></p></form>';
 }
@@ -222,7 +227,7 @@ document.addEventListener('submit',async event=>{
       product.stock=value('stock')?Number(value('stock')):null;
       const id=form.dataset.id;
       await request('/rest/v1/products'+(id?'?id=eq.'+id+'&business_id=eq.'+ownerStore.id:''),{method:id?'PATCH':'POST',token,data:id?product:{...product,business_id:ownerStore.id}});
-      if(form.closest('.inline-store-editor')){await reloadInlineStore();return;}
+      if(form.closest('.inline-store-editor')){await reloadInlineStore();if(modal.contains(form))modal.close();return;}
       modal.close();ownerDashboard();toast('Product saved.');return;
     }
     if(form.closest('.inline-store-editor')){await reloadInlineStore();return;}
