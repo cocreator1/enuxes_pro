@@ -35,7 +35,7 @@ function shopPicture(p){return p.image?imageTag(p.image,p.name):icon('bag','var(
 function shopPrice(p){return '<strong>'+(business.demo_pack&&p.price_minor===0?'N$0-00':money(price(p)))+'</strong>'+(p.sale?'<del>'+money(p.price)+'</del>':'');}
 function shopCard(p){return '<article class="shop-card"><button class="shop-photo" data-item="'+p.id+'" aria-label="View '+esc(p.name)+'">'+shopPicture(p)+'</button>'
  +'<button class="shop-heart '+(shopFav.includes(p.id)?'liked':'')+'" data-fav="'+p.id+'" aria-label="Favourite '+esc(p.name)+'" aria-pressed="'+shopFav.includes(p.id)+'">'+shopIcon('heart')+'</button>'
- +'<div class="shop-card-copy"><button data-item="'+p.id+'">'+esc(p.name)+'</button><div>'+shopPrice(p)+'</div>'+inlineEditButton('product',p.id,'Edit product')+'</div></article>';}
+ +inlineEditButton('photo',p.id,'+ Photos')+'<div class="shop-card-copy"><button data-item="'+p.id+'">'+esc(p.name)+'</button><div>'+(canEditInlineStore()?'<button data-item="'+p.id+'" aria-label="Edit price">'+shopPrice(p)+'</button>':shopPrice(p))+'</div>'+inlineEditButton('product',p.id,'Edit product')+'</div></article>';}
 function searchBox(){return '<label class="shop-search">'+shopIcon('search')+'<input id="shop-search" type="search" placeholder="Search products" aria-label="Search products" value="'+esc(shopSearch)+'"></label>';}
 function filteredItems(){const rows=shopItems().filter(p=>(!shopStock||p.stock!==0)&&(!shopSize||p.sizes?.includes(shopSize))).filter(p=>(!shopFilter||p.category===shopFilter)&&(!shopOnlyFav||shopFav.includes(p.id))&&(!shopOnlySale||p.sale)&&[p.name,p.category,p.description].join(' ').toLowerCase().includes(shopSearch.toLowerCase()));
  return shopSort==='low'?rows.sort((a,b)=>shopUnit(a)-shopUnit(b)):shopSort==='high'?rows.sort((a,b)=>shopUnit(b)-shopUnit(a)):rows;
@@ -77,7 +77,7 @@ function renderShop(){
   body='<div class="shop-heading"><h2>Catalogue</h2><p class="muted">Browse our collections</p></div><div class="shop-collections">'
    +(groups.map(([name,cover])=>'<button class="shop-collection" '+(name==='Sale'?'data-shop-sale':'data-collection="'+esc(name)+'"')+'>'+(cover?imageTag(cover):'')+'<strong>'+esc(name)+'</strong><span aria-hidden="true">›</span></button>').join('')||'<p>No collections yet.</p>')+'</div>';
  }
- app.innerHTML='<div class="shop-frame">'+(storefrontPreview?'<p class="store-preview-notice">Private owner preview · Ordering is disabled.</p>':'')+'<div class="shop-content">'+body+'</div>'+shopNav()+'</div>';
+ app.innerHTML='<div class="shop-frame">'+(storefrontPreview?'<p class="store-preview-notice">Private owner preview · Ordering is disabled.</p>':'')+ownerStoreToolbar()+'<div class="shop-content">'+body+'</div>'+shopNav()+'</div>';
  if(shopPage==='shop')updateShopGrid();
  if(canEditInlineStore()&&shopPage==='shop')app.querySelector('.shop-heading').insertAdjacentHTML('beforeend',inlineEditButton('product','','Add product'));
  if(shopPage==='home')renderPublishedLayout(homeConfig);
@@ -87,8 +87,9 @@ function detail(id){
  const p=getProduct(id);if(!p)return;
  if(canEditInlineStore()){
   ownerStore=business;
-  modal.className='shop-detail';
-  openDialog('Edit product','<div class="inline-store-editor">'+productForm(p,true)+'</div>');
+  modal.className='shop-detail owner-edit-sheet';
+  openDialog('Edit product','<div class="inline-store-editor">'+productForm(p,true)+'<button type="button" data-inline-delete="'+p.id+'">Delete item</button></div>');
+  initOwnerPhotos();
   return;
  }
  const options=(name,list)=>list?.length?'<fieldset><legend>'+name+'</legend><div class="shop-options">'+list.map((option,i)=>'<label><input type="radio" name="'+name+'" value="'+esc(option)+'" '+(i?'':'checked')+'><span>'+esc(option)+'</span></label>').join('')+'</div></fieldset>':'';
