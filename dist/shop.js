@@ -54,7 +54,11 @@ function shopNav(){
   +tabs.map(([key,label])=>visualButton('nav:'+key,label+(key==='cart'&&shopCart.length?' · '+shopCart.reduce((n,line)=>n+line.quantity,0):''),key,shopIcon(key))).join('')
   +settings+'</nav>';
 }
-function shopPills(){return '<div class="shop-pills">'+[['','All'],...collections().map(c=>[c,c])].map(([id,label])=>'<button data-collection="'+esc(id)+'" aria-pressed="'+(shopFilter===id&&!shopOnlySale)+'">'+esc(label)+'</button>').join('')+'</div>';}
+function shopCategorySelect(){
+ return '<label class="shop-category-strip">Category<select id="shop-category"><option value="">All products</option>'
+  +collections().map(category=>'<option value="'+esc(category)+'" '+(shopFilter===category?'selected':'')+'>'+esc(category)+'</option>').join('')
+  +'</select></label>';
+}
 function renderShop(){
  const homeConfig=currentHomeSettings();
  applyHomeColours(homeConfig);
@@ -70,12 +74,12 @@ function renderShop(){
    +'<button id="shop-follow" aria-pressed="'+Boolean(shopInfo.following)+'">'+shopIcon('people')+' '+(shopInfo.following?'Following':'Follow')+(Number.isFinite(Number(shopInfo.followers))?' · '+Number(shopInfo.followers).toLocaleString()+' followers':'')+'</button>'
    +([profile.category,profile.email,profile.phone].some(Boolean)?'<p class="muted">'+[profile.category,profile.email,profile.phone].filter(Boolean).map(esc).join(' · ')+'</p>':'')+inlineEditButton('profile','','Edit profile')+'</section>'
    +'<div data-home-section="slideshow">'+saleBanner+bannerHtml()+inlineEditButton('sections','','Edit slideshow and sections')+'</div>'
-   +'<div data-home-section="search">'+searchBox()+'</div><div data-home-section="categories">'+shopPills()+'</div><section data-home-section="featured"><div id="browse" class="row shop-heading">'+visualHeading('heading:featured','Featured')+visualButton('button:shop','See all','shop')+'</div><div class="shop-grid" id="products">'+(featured.map(shopCard).join('')||'<p>No products yet.</p>')+'</div></section>';
+   +'<div data-home-section="search">'+searchBox()+'</div><div data-home-section="categories">'+shopCategorySelect()+'</div><section data-home-section="featured"><div id="browse" class="row shop-heading">'+visualHeading('heading:featured','Featured')+visualButton('button:shop','See all','shop')+'</div><div class="shop-grid" id="products">'+(featured.map(shopCard).join('')||'<p>No products yet.</p>')+'</div></section>';
  }else if(shopPage==='shop'){
   body='<div class="shop-heading">'+visualHeading('heading:shop','Shop all products')+'<p class="muted">Browse the collection</p></div>'+searchBox()
-   +'<div class="shop-filters"><label>Category<select id="shop-category"><option value="">All products</option>'+collections().map(c=>'<option value="'+esc(c)+'" '+(shopFilter===c?'selected':'')+'>'+esc(c)+'</option>').join('')+'</select></label>'
+   +'<div class="shop-filters" role="group" aria-label="Product filters">'
    +'<label>Sort<select id="shop-sort"><option value="">Default</option><option value="low" '+(shopSort==='low'?'selected':'')+'>Price low to high</option><option value="high" '+(shopSort==='high'?'selected':'')+'>Price high to low</option></select></label>'
-   +'<button data-shop-filter="fav" aria-pressed="'+shopOnlyFav+'">'+shopIcon('heart')+' Favourites</button><button data-shop-filter="sale" aria-pressed="'+shopOnlySale+'">Sale</button><button data-shop-filter="stock" aria-pressed="'+shopStock+'">In stock</button><button data-shop-filter="clear">Clear filters</button></div>'+shopPills()+'<div class="shop-grid" id="shop-grid"></div>';
+   +'<button data-shop-filter="fav" aria-pressed="'+shopOnlyFav+'">'+shopIcon('heart')+' Favourites</button><button data-shop-filter="sale" aria-pressed="'+shopOnlySale+'">Sale</button><button data-shop-filter="stock" aria-pressed="'+shopStock+'">In stock</button><button data-shop-filter="clear">Clear filters</button></div>'+shopCategorySelect()+'<div class="shop-grid" id="shop-grid"></div>';
  }else{
   const names=collections();
   if(items.some(p=>p.sale))names.push('Sale');
@@ -232,7 +236,7 @@ document.addEventListener('input',event=>{
   if(caret!==null)try{input.setSelectionRange(caret,caret);}catch{}
  }else updateShopGrid();
 });
-document.addEventListener('change',event=>{if(event.target.id==='shop-category'){shopFilter=event.target.value;updateShopGrid();}if(event.target.id==='shop-sort'){shopSort=event.target.value;updateShopGrid();}});
+document.addEventListener('change',event=>{if(event.target.id==='shop-category'){shopFilter=event.target.value;shopOnlySale=false;if(shopPage==='home')changeShop('shop');else renderShop();}if(event.target.id==='shop-sort'){shopSort=event.target.value;updateShopGrid();}});
 document.addEventListener('submit',async event=>{
  const form=event.target;if(!['shop-item','shop-order'].includes(form.id))return;
  event.preventDefault();if(storefrontPreview)return;const fields=new FormData(form);
