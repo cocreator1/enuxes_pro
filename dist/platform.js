@@ -608,7 +608,7 @@ function applyStorefront(snapshot){
 
 async function boot() {
   nav.innerHTML = '<a class="brand" href="/"><img src="/enuxes-logo.svg" width="34" height="34" alt="">eNuxes</a><a href="/">Businesses</a>';
-  document.querySelector('footer').textContent = 'eNuxes · Commerce & hospitality';
+  document.querySelector('footer').textContent = 'Powered by eNuxes - 2026';
   if (ownerSlug || location.pathname.replace(/\/$/,'') === adminPath) {
     document.body.classList.add('workspace');
     app.innerHTML = '<p>Loading sign-in…</p>';
