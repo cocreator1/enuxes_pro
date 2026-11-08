@@ -77,7 +77,7 @@ function profileForm(store,content){
       +field('Business name','name',store.name,100,'text',true)+field('Category','category',content.category,80)
       +'<label>Description<textarea name="description" maxlength="1000">'+esc(store.description)+'</textarea></label>'
       +field('Public email','email',content.email,254,'email')+field('Public phone','phone',content.phone,80,'tel')
-      +imageTag(content.logo,'Current business logo')+uploadField('logo')+'<div><button class="primary">Save profile</button></div><p role="status"></p></form>';
+      +imageTag(content.logo,'Current business logo')+uploadField('logo')+'<div><button class="primary">Save Changes</button><button type="button" data-action="close" class="owner-sheet-cancel">Cancel</button></div><p role="status"></p></form>';
 }
 
 function productEditor(product={}){
@@ -87,9 +87,7 @@ function productEditor(product={}){
 function productForm(product={},inPlace=false){
   const media=uploadField('photo',true)+'<small>Select up to 10 photos to replace the gallery. The first is the cover.</small>';
   const photos=[product.image_url,...(product.gallery||[])].filter(safeImage);
-  const imagePicker='<div class="shop-detail-photo inline-product-photo">'+(imageTag(photos[0],product.name)||icon('bag'))+uploadField('photo',true).replace('Drop images here or browse','<span aria-hidden="true">+</span> <span>Add or replace photos</span>')+'</div>'
-    +(photos.length>1?'<div class="shop-thumbs">'+photos.slice(1).map(url=>imageTag(url,'Product gallery photo')).join('')+'</div>':'')
-    +'<small>Select up to 10 photos. The first is the cover.</small>';
+  const imagePicker='<div class="owner-photo-editor" data-photos="'+esc(JSON.stringify(photos.slice(0,10)))+'"></div>';
   return '<form id="owner-product" data-id="'+(product.id||'')+'">'+(inPlace?imagePicker:'')
     +field('Product name','name',product.name,100,'text',true)+field('Category','category',product.category,80,'text',true)
     +'<label>Description<textarea name="description" maxlength="1000">'+esc(product.description)+'</textarea></label>'
@@ -100,7 +98,7 @@ function productForm(product={},inPlace=false){
     +'<label>Stock (blank if untracked)<input name="stock" type="number" min="0" max="2147483647" step="1" value="'+esc(product.stock)+'"></label>'
     +(inPlace?'':imageTag(product.image_url,'Current product photo')+media)
     +'<label><span><input type="checkbox" name="active" '+(product.active===false?'':'checked')+'> Show in catalogue</span></label>'
-    +'<button class="primary">Save product</button><p role="status"></p></form>';
+    +'<div class="owner-editor-actions"><button class="primary">Save Changes</button>'+(inPlace?'<button type="button" data-action="close">Cancel</button>':'')+'</div><p role="status"></p></form>';
 }
 
 function layoutEditor(target,content,onSaved){
@@ -200,7 +198,7 @@ document.addEventListener('submit',async event=>{
   const form=event.target;
   if(!['owner-profile','owner-product','owner-delete-product','admin-layout-limit'].includes(form.id))return;
   event.preventDefault();
-  const button=form.querySelector('button'),status=form.querySelector('[role=status]');
+  const button=form.querySelector('button:not([type=button])'),status=form.querySelector(':scope > [role=status]');
   button.disabled=true;
   const data=new FormData(form);
   const value=key=>String(data.get(key)||'').trim();
@@ -209,6 +207,7 @@ document.addEventListener('submit',async event=>{
     if(form.id==='owner-delete-product'){
       const removed=await request('/rest/v1/products?id=eq.'+form.dataset.id+'&business_id=eq.'+ownerStore.id,{method:'DELETE',token,prefer:'return=representation'});
       if(removed?.length!==1)throw new Error('The product could not be removed.');
+      if(canEditInlineStore()){await reloadInlineStore();modal.close();return;}
       modal.close();ownerDashboard();toast('Product deleted.');return;
     }
     if(form.id==='admin-layout-limit'){
@@ -219,8 +218,9 @@ document.addEventListener('submit',async event=>{
       await updateContent(ownerStore.id,{email:value('email'),phone:value('phone'),category:value('category'),...(logo?{logo}:{})},token);
       ownerStore.name=value('name');ownerStore.description=value('description');
     }else{
-      const [photo,...gallery]=await uploadMedia(data.getAll('photo'));
-      const product={name:value('name'),category:value('category'),description:value('description'),price_minor:Math.round(Number(value('price'))*100),active:data.has('active'),...(photo?{image_url:photo,gallery}:{})};
+      const photos=photoDrafts.get(form.querySelector('.owner-photo-editor'));
+      const [photo,...gallery]=photos?photos.urls:await uploadMedia(data.getAll('photo'));
+      const product={name:value('name'),category:value('category'),description:value('description'),price_minor:Math.round(Number(value('price'))*100),active:data.has('active'),...(photo||photos?{image_url:photo||null,gallery}:{})};
       product.sale_price_minor=value('sale')?Math.round(Number(value('sale'))*100):null;
       product.sizes=value('sizes').split(',').map(s=>s.trim()).filter(Boolean);
       product.colours=value('colours').split(',').map(s=>s.trim()).filter(Boolean);
@@ -232,7 +232,7 @@ document.addEventListener('submit',async event=>{
     }
     if(form.closest('.inline-store-editor')){await reloadInlineStore();return;}
     status.textContent='Saved.';
-  }catch(error){status.textContent=error.message;}finally{button.disabled=false;}
+  }catch(error){status.textContent=error.message;if(form.closest('.inline-store-editor'))markOwnerEditor('Unsaved changes');}finally{button.disabled=false;}
 });
 
 async function openLayoutLimit(id){
@@ -454,7 +454,7 @@ async function trendoraMerchEditor(target,token){
  const form=target.querySelector('form');
  form.onsubmit=async event=>{
   event.preventDefault();
-  const button=form.querySelector('button'),status=form.querySelector('[role=status]'), data=new FormData(form);
+  const button=form.querySelector('button:not([type=button])'),status=form.querySelector('[role=status]'), data=new FormData(form);
   const val=key=>String(data.get(key)||'').trim();
   const validUrl=url=>{if(url&&!safeImage(url))throw new Error('Use HTTPS image and destination links.');return url;};
   button.disabled=true;status.textContent='Saving…';
@@ -470,7 +470,7 @@ async function trendoraMerchEditor(target,token){
     collections:configured.sort((a,b)=>a.position-b.position)
    }},await getSessionToken());
    status.textContent='Saved. The storefront will refresh automatically.';
-  }catch(error){status.textContent=error.message;}finally{button.disabled=false;}
+  }catch(error){status.textContent=error.message;if(form.closest('.inline-store-editor'))markOwnerEditor('Unsaved changes');}finally{button.disabled=false;}
  };
 }
 
@@ -486,7 +486,7 @@ async function trendoraDeliveryEditor(target,token){
    const rows=await request('/rest/v1/business_settings?business_id=eq.'+ownerStore.id,{method:'PATCH',token:await getSessionToken(),prefer:'return=representation',data:{delivery_enabled:data.has('enabled'),delivery_fee_minor:Math.round(Number(data.get('fee'))*100)}});
    if(rows?.length!==1)throw new Error('Delivery settings were not saved.');
    status.textContent='Delivery settings saved.';
-  }catch(error){status.textContent=error.message;}finally{button.disabled=false;}
+  }catch(error){status.textContent=error.message;if(form.closest('.inline-store-editor'))markOwnerEditor('Unsaved changes');}finally{button.disabled=false;}
  };
 }
 
@@ -498,11 +498,11 @@ function renderTrendoraOrders(target,orders){
 }
 document.addEventListener('submit',async event=>{
  const form=event.target;if(!form.dataset.trendoraOrder)return;
- event.preventDefault();const button=form.querySelector('button'),status=form.querySelector('[role=status]');
+ event.preventDefault();const button=form.querySelector('button:not([type=button])'),status=form.querySelector(':scope > [role=status]');
  button.disabled=true;status.textContent='Saving…';
  try{
   const rows=await request('/rest/v1/orders?id=eq.'+form.dataset.trendoraOrder+'&business_id=eq.'+ownerStore.id,{method:'PATCH',token:await getSessionToken(),prefer:'return=representation',data:{status:new FormData(form).get('status')}});
   if(rows?.length!==1)throw new Error('Order status was not saved.');
   status.textContent='Order status saved.';
- }catch(error){status.textContent=error.message;}finally{button.disabled=false;}
+ }catch(error){status.textContent=error.message;if(form.closest('.inline-store-editor'))markOwnerEditor('Unsaved changes');}finally{button.disabled=false;}
 });
