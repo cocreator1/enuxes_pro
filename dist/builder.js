@@ -66,18 +66,26 @@ async function ownerEditor(tab,target,token) {
   }
   const content=await contentFor(ownerStore.id,token);
   if(tab==='Business profile'){
-    target.innerHTML='<div class="panel"><h2>Business profile</h2><form id="owner-profile">'
-      +field('Business name','name',ownerStore.name,100,'text',true)+field('Category','category',content.category,80)
-      +'<label>Description<textarea name="description" maxlength="1000">'+esc(ownerStore.description)+'</textarea></label>'
-      +field('Public email','email',content.email,254,'email')+field('Public phone','phone',content.phone,80,'tel')
-      +imageTag(content.logo,'Current business logo')+uploadField('logo')+'<div><button class="primary">Save profile</button></div><p role="status"></p></form></div>';
+    target.innerHTML='<div class="panel"><h2>Business profile</h2>'+profileForm(ownerStore,content)+'</div>';
     return;
   }
   layoutEditor(target,content);
 }
 
+function profileForm(store,content){
+  return '<form id="owner-profile">'
+      +field('Business name','name',store.name,100,'text',true)+field('Category','category',content.category,80)
+      +'<label>Description<textarea name="description" maxlength="1000">'+esc(store.description)+'</textarea></label>'
+      +field('Public email','email',content.email,254,'email')+field('Public phone','phone',content.phone,80,'tel')
+      +imageTag(content.logo,'Current business logo')+uploadField('logo')+'<div><button class="primary">Save profile</button></div><p role="status"></p></form>';
+}
+
 function productEditor(product={}){
-  openDialog(product.id?'Edit product':'Add product','<form id="owner-product" data-id="'+(product.id||'')+'">'
+  openDialog(product.id?'Edit product':'Add product',productForm(product));
+}
+
+function productForm(product={}){
+  return '<form id="owner-product" data-id="'+(product.id||'')+'">'
     +field('Product name','name',product.name,100,'text',true)+field('Category','category',product.category,80,'text',true)
     +'<label>Description<textarea name="description" maxlength="1000">'+esc(product.description)+'</textarea></label>'
     +'<label>Price (N$)<input name="price" type="number" min=".01" max="21474836.47" step=".01" required value="'+(product.price_minor==null?'':product.price_minor/100)+'"></label>'
@@ -87,14 +95,14 @@ function productEditor(product={}){
     +'<label>Stock (blank if untracked)<input name="stock" type="number" min="0" max="2147483647" step="1" value="'+esc(product.stock)+'"></label>'
     +imageTag(product.image_url,'Current product photo')+uploadField('photo',true)+'<small>Select up to 10 photos to replace the gallery. The first is the cover.</small>'
     +'<label><span><input type="checkbox" name="active" '+(product.active===false?'':'checked')+'> Show in catalogue</span></label>'
-    +'<button class="primary">Save product</button><p role="status"></p></form>');
+    +'<button class="primary">Save product</button><p role="status"></p></form>';
 }
 
-function layoutEditor(target,content){
+function layoutEditor(target,content,onSaved){
   const blocks=structuredClone(content.blocks || starterBlocks());
   const store=ownerStore;
   target.innerHTML='<section class="panel stack builder-shell"><div class="builder-publish"><div class="row"><div><h2>Page sections</h2><small>Arrange what appears on your storefront Home tab.</small></div>'
-    +'<div class="toolbar"><button data-preview-layout>Preview draft</button><button class="primary" data-save-layout>Publish layout</button></div></div>'
+    +'<div class="toolbar"><button data-preview-layout>Preview draft</button><button class="primary" data-save-layout>'+(onSaved?'Save sections':'Publish layout')+'</button></div></div>'
     +'<p id="builder-status" role="status">Viewing the published layout.</p><a id="builder-live" href="/'+store.slug+'" target="_blank" rel="noopener" hidden>Open storefront Home ↗</a></div>'
     +'<div class="toolbar builder-tools">'
     +['text','image','slideshow'].map(kind=>'<button data-add-block="'+kind+'">+ '+blockNames[kind]+'</button>').join('')
@@ -172,6 +180,7 @@ function layoutEditor(target,content){
       saving=true;sync();note('Publishing layout…');
       try{
         await updateContent(store.id,{blocks:snapshot},await getSessionToken());
+        if(revision===version&&onSaved){await onSaved();return;}
         if(revision===version){
           note(store.active?'Published. Open the storefront Home tab to see your changes.':'Layout saved. It will appear when this store is active.');
           live.hidden=!store.active;
@@ -213,8 +222,10 @@ document.addEventListener('submit',async event=>{
       product.stock=value('stock')?Number(value('stock')):null;
       const id=form.dataset.id;
       await request('/rest/v1/products'+(id?'?id=eq.'+id+'&business_id=eq.'+ownerStore.id:''),{method:id?'PATCH':'POST',token,data:id?product:{...product,business_id:ownerStore.id}});
+      if(form.closest('.inline-store-editor')){await reloadInlineStore();return;}
       modal.close();ownerDashboard();toast('Product saved.');return;
     }
+    if(form.closest('.inline-store-editor')){await reloadInlineStore();return;}
     status.textContent='Saved.';
   }catch(error){status.textContent=error.message;}finally{button.disabled=false;}
 });
