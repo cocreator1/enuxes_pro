@@ -88,6 +88,7 @@ body.workspace {background:#fff}
 .builder-tools{margin:0}.builder-shell [data-block]{padding:12px;gap:8px}.builder-shell [data-block] .toolbar{margin:0}
 #builder-preview .store-media{margin:10px 0}
 @media(max-width:760px){.builder-publish .toolbar button,.builder-tools button{min-height:44px}.builder-publish .toolbar{margin:0}.builder-publish small{display:block}}
+.market-search{display:flex;align-items:end;gap:8px;flex-wrap:wrap;margin-bottom:18px}.market-search label{flex:1 1 220px}.market-search input{font-size:16px;width:100%}.market-banners{display:grid;gap:12px;margin-bottom:18px}.market-banners img{display:block;width:100%;max-height:320px;object-fit:contain;border-radius:12px}
 </style><link rel="stylesheet" href="/shop.css"></head><body><header><nav id="nav"></nav></header><main id="app"></main><footer>eNuxes · Commerce & hospitality <span class="muted"> / Demo workspace</span></footer><dialog id="modal"></dialog><div id="toast" role="status"></div>
 <script>
 'use strict';
@@ -138,4 +139,4 @@ document.addEventListener('click', event => {
 document.addEventListener('input', event => {
   if (event.target.id === 'search') { query = event.target.value; filter(); }
 });
-</script><script src="/builder.js"></script><script src="/shop.js"></script><script src="/platform.js"></script></body></html>
+</script><script src="/builder.js"></script><script src="/shop.js"></script><script src="/marketplace.js"></script><script src="/platform.js"></script></body></html>
