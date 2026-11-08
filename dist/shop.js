@@ -35,7 +35,7 @@ function shopPicture(p){return p.image?imageTag(p.image,p.name):icon('bag','var(
 function shopPrice(p){return '<strong>'+(business.demo_pack&&p.price_minor===0?'N$0-00':money(price(p)))+'</strong>'+(p.sale?'<del>'+money(p.price)+'</del>':'');}
 function shopCard(p){return '<article class="shop-card"><button class="shop-photo" data-item="'+p.id+'" aria-label="View '+esc(p.name)+'">'+shopPicture(p)+'</button>'
  +'<button class="shop-heart '+(shopFav.includes(p.id)?'liked':'')+'" data-fav="'+p.id+'" aria-label="Favourite '+esc(p.name)+'" aria-pressed="'+shopFav.includes(p.id)+'">'+shopIcon('heart')+'</button>'
- +'<div class="shop-card-copy"><button data-item="'+p.id+'">'+esc(p.name)+'</button><div>'+shopPrice(p)+'</div></div></article>';}
+ +'<div class="shop-card-copy"><button data-item="'+p.id+'">'+esc(p.name)+'</button><div>'+shopPrice(p)+'</div>'+inlineEditButton('product',p.id,'Edit product')+'</div></article>';}
 function searchBox(){return '<label class="shop-search">'+shopIcon('search')+'<input id="shop-search" type="search" placeholder="Search products" aria-label="Search products" value="'+esc(shopSearch)+'"></label>';}
 function filteredItems(){const rows=shopItems().filter(p=>(!shopStock||p.stock!==0)&&(!shopSize||p.sizes?.includes(shopSize))).filter(p=>(!shopFilter||p.category===shopFilter)&&(!shopOnlyFav||shopFav.includes(p.id))&&(!shopOnlySale||p.sale)&&[p.name,p.category,p.description].join(' ').toLowerCase().includes(shopSearch.toLowerCase()));
  return shopSort==='low'?rows.sort((a,b)=>shopUnit(a)-shopUnit(b)):shopSort==='high'?rows.sort((a,b)=>shopUnit(b)-shopUnit(a)):rows;
@@ -57,8 +57,8 @@ function renderShop(){
   body='<section data-home-section="profile" class="shop-profile">'+(imageTag(profile.logo,business.name)||'<div class="shop-avatar">'+esc(business.name.slice(0,1).toUpperCase())+'</div>')
    +'<h1>'+esc(business.name)+'</h1><small>on eNuxes</small><p>'+esc(business.description)+'</p>'
    +'<button id="shop-follow" aria-pressed="'+Boolean(shopInfo.following)+'">'+shopIcon('people')+' '+(shopInfo.following?'Following':'Follow')+(Number.isFinite(Number(shopInfo.followers))?' · '+Number(shopInfo.followers).toLocaleString()+' followers':'')+'</button>'
-   +([profile.category,profile.email,profile.phone].some(Boolean)?'<p class="muted">'+[profile.category,profile.email,profile.phone].filter(Boolean).map(esc).join(' · ')+'</p>':'')+'</section>'
-   +'<div data-home-section="slideshow">'+saleBanner+bannerHtml()+'</div>'
+   +([profile.category,profile.email,profile.phone].some(Boolean)?'<p class="muted">'+[profile.category,profile.email,profile.phone].filter(Boolean).map(esc).join(' · ')+'</p>':'')+inlineEditButton('profile','','Edit profile')+'</section>'
+   +'<div data-home-section="slideshow">'+saleBanner+bannerHtml()+inlineEditButton('sections','','Edit slideshow and sections')+'</div>'
    +'<div data-home-section="search">'+searchBox()+'</div><div data-home-section="categories">'+shopPills()+'</div><section data-home-section="featured"><div id="browse" class="row shop-heading"><h2>Featured</h2><button data-shop-page="shop">See all</button></div><div class="shop-grid" id="products">'+(featured.map(shopCard).join('')||'<p>No products yet.</p>')+'</div></section>';
  }else if(shopPage==='shop'){
   body='<div class="shop-heading"><h2>Shop all products</h2><p class="muted">Browse the collection</p></div>'+searchBox()
@@ -79,6 +79,7 @@ function renderShop(){
  }
  app.innerHTML='<div class="shop-frame">'+(storefrontPreview?'<p class="store-preview-notice">Private owner preview · Ordering is disabled.</p>':'')+'<div class="shop-content">'+body+'</div>'+shopNav()+'</div>';
  if(shopPage==='shop')updateShopGrid();
+ if(canEditInlineStore()&&shopPage==='shop')app.querySelector('.shop-heading').insertAdjacentHTML('beforeend',inlineEditButton('product','','Add product'));
  if(shopPage==='home')renderPublishedLayout(homeConfig);
 }
 
@@ -135,12 +136,12 @@ function startTrendoraRefresh(){
  modal.addEventListener('close',refresh);
 }
 async function refreshTrendora(){
- if(trendoraRefreshing||document.hidden||modal.open||checkoutInFlight||document.activeElement?.matches('input,select,textarea'))return;
+ if(app.querySelector('.inline-store-editor')||trendoraRefreshing||document.hidden||modal.open||checkoutInFlight||document.activeElement?.matches('input,select,textarea'))return;
  trendoraRefreshing=true;
  try{
   const [snapshot,info]=await Promise.all([readStorefront(business.slug),
     storefrontPreview?Promise.resolve([]):request('/rest/v1/rpc/shop_info',{method:'POST',data:{p_business:business.id,p_device:shopDevice,p_follow:null}})]);
-  if(modal.open||checkoutInFlight||document.activeElement?.matches('input,select,textarea'))return;
+  if(app.querySelector('.inline-store-editor')||modal.open||checkoutInFlight||document.activeElement?.matches('input,select,textarea'))return;
   if(!snapshot){app.innerHTML='<h2>Store unavailable</h2><a href="/">Browse businesses</a>';return;}
   const changed=JSON.stringify(snapshot)!==storefrontVersion;
   const infoChanged=JSON.stringify(info[0]||{})!==JSON.stringify(shopInfo);
