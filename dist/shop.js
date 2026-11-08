@@ -31,14 +31,14 @@ const cartKey=()=> 'enuxes-shop-'+business.id;
 function loadSaved(key,fallback){try{return JSON.parse(localStorage.getItem(key))??fallback;}catch{return fallback;}}
 function saveShop(){try{localStorage.setItem(cartKey(),JSON.stringify({cart:shopCart,fav:shopFav,request:shopRequest}));}catch{}}
 const shopItems=()=>db.products.filter(p=>p.active);
-function shopPicture(p){return p.image?imageTag(p.image,p.name):icon('bag','var(--shop-ink,#166047)');}
+function shopPicture(p){return imageTag(p.image||safeImage(p.gallery?.[0]),p.name)||icon('bag','var(--shop-ink,#166047)');}
 function shopPrice(p){return '<strong>'+(business.demo_pack&&p.price_minor===0?'N$0-00':money(price(p)))+'</strong>'+(p.sale?'<del>'+money(p.price)+'</del>':'');}
 function shopCard(p){
  const badge={...visualSetting('price-default'),...visualSetting('price:'+p.id)};
  return '<article class="shop-card"><div class="shop-card-media"><button class="shop-photo" data-item="'+p.id+'" aria-label="View '+esc(p.name)+'">'+shopPicture(p)+'</button>'
  +'<span class="shop-price-slot"><span class="shop-price-badge" style="'+visualPaint(badge)+'">'+shopPrice(p)+'</span>'+visualDots('price:'+p.id,'price badge')+'</span></div>'
  +'<button class="shop-heart '+(shopFav.includes(p.id)?'liked':'')+'" data-fav="'+p.id+'" aria-label="Favourite '+esc(p.name)+'" aria-pressed="'+shopFav.includes(p.id)+'">'+shopIcon('heart')+'</button>'
- +inlineEditButton('photo',p.id,'+ Photos')+'<div class="shop-card-copy"><button data-item="'+p.id+'">'+esc(p.name)+'</button>'+inlineEditButton('product',p.id,'Edit product')+'</div></article>';
+ +inlineEditButton('photo',p.id,'Image')+'<div class="shop-card-copy"><button data-item="'+p.id+'">'+esc(p.name)+'</button>'+inlineEditButton('product',p.id,'Edit product')+'</div></article>';
 }
 function searchBox(){return '<label class="shop-search">'+shopIcon('search')+'<input id="shop-search" type="search" placeholder="Search products" aria-label="Search products" value="'+esc(shopSearch)+'"></label>';}
 function filteredItems(){const rows=shopItems().filter(p=>(!shopStock||p.stock!==0)&&(!shopSize||p.sizes?.includes(shopSize))).filter(p=>(!shopFilter||p.category===shopFilter)&&(!shopOnlyFav||shopFav.includes(p.id))&&(!shopOnlySale||p.sale)&&[p.name,p.category,p.description].join(' ').toLowerCase().includes(shopSearch.toLowerCase()));
@@ -101,13 +101,11 @@ function detail(id){
   ownerStore=business;
   modal.className='shop-detail owner-edit-sheet';
   openDialog('Edit product','<div class="inline-store-editor">'+productForm(p,true)+'<button type="button" data-inline-delete="'+p.id+'">Delete item</button></div>');
-  initOwnerPhotos();
   return;
  }
  const options=(name,list)=>list?.length?'<fieldset><legend>'+name+'</legend><div class="shop-options">'+list.map((option,i)=>'<label><input type="radio" name="'+name+'" value="'+esc(option)+'" '+(i?'':'checked')+'><span>'+esc(option)+'</span></label>').join('')+'</div></fieldset>':'';
- const photos=[p.image,...(Array.isArray(p.gallery)?p.gallery:[])].filter(safeImage);
  modal.className='shop-detail';
- openDialog('Details','<div class="shop-detail-photo">'+(photos.length?imageTag(photos[0],p.name):shopPicture(p))+'</div>'+(photos.length>1?'<div class="shop-thumbs">'+photos.map((url,i)=>'<button data-detail-photo="'+esc(url)+'" aria-label="View photo '+(i+1)+'">'+imageTag(url)+'</button>').join('')+'</div>':'')
+ openDialog('Details','<div class="shop-detail-photo">'+shopPicture(p)+'</div>'
   +'<form id="shop-item" data-id="'+p.id+'"><div class="row"><h2>'+esc(p.name)+'</h2><button type="button" data-fav="'+p.id+'" aria-label="Favourite" aria-pressed="'+shopFav.includes(p.id)+'">'+shopIcon('heart')+'</button></div><div class="shop-detail-price">'+shopPrice(p)+'</div>'
   +options('Colour',p.colours)+options('Size',p.sizes)
   +'<label>Quantity <div class="shop-step"><button type="button" data-detail-step="-1" aria-label="Decrease quantity">−</button><input name="quantity" type="number" min="1" max="'+Math.min(99,p.stock??99)+'" value="1" aria-label="Quantity" required><button type="button" data-detail-step="1" aria-label="Increase quantity">+</button></div></label>'
@@ -204,7 +202,6 @@ document.addEventListener('click',async event=>{
  const d=button.dataset;
  if(d.shopPage){if(d.shopPage==='cart')return storefrontPreview?openDialog('Cart preview','<p>Orders are disabled in this preview.</p>'):showCart();shopSearch=shopFilter='';shopOnlySale=shopOnlyFav=false;return changeShop(d.shopPage);}
  if(d.item)return detail(d.item);
- if(d.detailPhoto&&safeImage(d.detailPhoto)){const image=modal.querySelector('.shop-detail-photo img');if(image)image.src=d.detailPhoto;return;}
  if(d.fav){
   shopFav=shopFav.includes(d.fav)?shopFav.filter(id=>id!==d.fav):[...shopFav,d.fav];saveShop();
   if(modal.open)button.setAttribute('aria-pressed',shopFav.includes(d.fav));renderShop();return;
