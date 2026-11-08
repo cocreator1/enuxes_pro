@@ -225,3 +225,26 @@ body:has(.shop-frame>.shop-tabs)>footer{
 .shop-card-media:has(.shop-quick-add) .shop-price-slot{max-width:calc(100% - 3.7rem)}
 .shop-quick-add{position:absolute;inset:auto .55rem .55rem auto;display:grid;place-items:center;width:44px;height:44px;padding:0;border-radius:.7rem;background:#fff;color:var(--shop-ink,#166047);font-size:1.5rem;line-height:1}
 .shop-card-description{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere;margin:.15rem 0 .35rem;font-size:.85rem;line-height:1.35;color:inherit;opacity:.8}
+
+.shop-line-pricing{display:grid;gap:.12rem;min-width:0;overflow-wrap:anywhere}
+.shop-line-pricing b{font-size:1.08rem}
+.shop-line-pricing small{color:#52617a}
+.shop-line-pricing small:empty{display:none}
+.shop-cart-actions{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+.shop-step{display:inline-flex;gap:0;width:max-content;max-width:100%;overflow:hidden;border:1px solid #bcd5e8;border-radius:.75rem;background:#dceefb;color:#18324a}
+.shop-step :is(button,input,span){min-height:44px;background:#dceefb;color:#18324a;border:0;border-radius:0}
+.shop-step span{display:grid;place-items:center;min-width:2.25rem}
+.shop-step input{width:3.1rem}
+.shop-step button{min-width:40px}
+.shop-step :is(button,input,span)+:is(button,input,span){border-inline-start:1px solid #bcd5e8}
+.shop-remove{padding:.45rem .65rem;min-height:44px}
+.shop-checkout-items{display:grid;gap:.65rem}
+.shop-checkout-items .shop-cart-line{grid-template-columns:55px minmax(0,1fr)}
+.shop-choice{display:flex;align-items:center;gap:.55rem;min-height:42px}
+.shop-choice input{width:auto;min-height:0}
+#shop-order [hidden]{display:none}
+#shop-order [data-payment-instructions]{white-space:pre-wrap;overflow-wrap:anywhere}
+.shop-total .row{justify-content:space-between;gap:1rem}
+.shop-total .row strong{text-align:right}
+.shop-total .row:last-child{font-size:1.12rem;border-top:1px solid var(--border);padding-top:.55rem}
+@media(max-width:460px){.shop-cart-actions{grid-column:2}.shop-cart-line{padding-block:.65rem}}
