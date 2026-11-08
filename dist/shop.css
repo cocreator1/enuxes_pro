@@ -152,3 +152,12 @@ dialog.owner-edit-sheet{position:fixed;inset:0 0 0 auto;margin:0;width:min(520px
 .visual-store-price{display:flex;justify-content:flex-end;align-items:center;gap:.3rem;font-size:.8rem}
 .visual-save-status{flex-basis:100%;margin:0;font-size:.85rem;overflow-wrap:anywhere}
 .visual-save-status:empty{display:none}
+
+.landing-tab,.landing-button{display:flex;gap:.5rem;flex-wrap:wrap;margin-block:.65rem}
+.landing-tab{flex-wrap:nowrap;overflow-x:auto}
+.landing-tab .landing-item{flex:none}
+.landing-item{display:flex;align-items:center;gap:.4rem;min-width:0;overflow-wrap:anywhere}
+.landing-item p{white-space:pre-wrap}
+.landing-image img,.hero-art img{max-width:100%;max-height:320px;object-fit:contain;border-radius:14px}
+#market-landing-editor{min-width:0}
+#market-landing-editor .hero section{min-width:0;overflow-wrap:anywhere}
