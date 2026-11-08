@@ -58,7 +58,7 @@ async function adminRequest(name, args = {}) {
 function signIn(message = '') {
   app.innerHTML = '<div class="panel" style="max-width:440px;margin:48px auto"><h2>' + (ownerSlug ? 'Store owner' : 'Main Admin') + '</h2>'
     + (message ? '<p class="notice" role="alert">' + esc(message) + '</p>' : '')
-    + '<form id="main-admin-login"><label>' + (ownerSlug ? 'Email' : 'Username') + '<input name="email" type="' + (ownerSlug ? 'email' : 'text') + '" autocomplete="username" required></label>'
+    + '<form id="main-admin-login"><label>' + (ownerSlug ? 'Username or email' : 'Username') + '<input name="email" type="' + 'text' + '" autocomplete="username" required></label>'
     + '<label>Password<input name="password" type="password" autocomplete="current-password" required></label>'
     + '<button class="primary">Sign in</button></form></div>';
 }
@@ -81,6 +81,7 @@ function storeCard(store) {
     + (store.status_reason ? '<small>' + esc(store.status_reason) + '</small>' : '')
     + '<div class="toolbar">' + buttons.map(([status,label]) =>
       '<button data-business-status="' + status + '" data-business-id="' + store.id + '">' + label + '</button>').join('')
+    + (section === 'stores' ? '<button data-layout-limit="' + store.id + '">Slideshow limit</button>' : '')
     + (section === 'support' ? '<button data-support="' + store.id + '">Open conversation</button>' : '')
     + (section === 'analytics' ? '<button data-analytics="' + store.id + '">View analytics</button>' : '')
     + (['ads','billing'].includes(section) ? '<button data-ad-settings="' + store.id + '">' + (section === 'billing' ? 'Ad-free billing' : 'Manage banner') + '</button>' : '')
@@ -190,6 +191,9 @@ function showCreate() {
     + '<label>Business type<select name="type">' + ['ONLINE_STORE', ...types.filter(t=>t!=='ONLINE_STORE')].map(t=>'<option value="'+t+'">'+t.replaceAll('_',' ')+'</option>').join('') + '</select></label>'
     + '<label>Package<select name="package"><option>Starter</option><option>Silver</option><option>Gold</option></select></label>'
     + '<label>Description<input name="description" maxlength="300"></label>'
+    + '<label>Owner name<input name="ownerName" required maxlength="100"></label>'
+    + '<label>Owner username<input name="username" required minlength="3" maxlength="32" pattern="[a-z0-9][a-z0-9_\\-]{2,31}" autocomplete="off"></label>'
+    + '<label>Initial owner password<input name="ownerPassword" type="password" required minlength="14" maxlength="72" autocomplete="new-password"></label>'
     + '<label><span><input type="checkbox" name="active"> Activate immediately</span></label>'
     + '<p id="admin-form-error" role="alert" hidden></p><button class="primary">Create store</button></form>');
   const form = document.getElementById('main-admin-create');
@@ -207,6 +211,7 @@ document.addEventListener('click', async event => {
   if (!target) return;
   if (target.dataset.action==='close') supportLoad++;
   if (target.dataset.ownerTab && ownerStore) { ownerTab=target.dataset.ownerTab; return ownerDashboard(); }
+  if (target.dataset.layoutLimit) return openLayoutLimit(target.dataset.layoutLimit);
   if (target.dataset.support) return openSupport(target.dataset.support);
   if (target.dataset.section) return changeSection(target.dataset.section);
   if (target.dataset.metric) {
@@ -286,7 +291,7 @@ document.addEventListener('submit', async event => {
   try {
     if (form.id === 'main-admin-login') {
       session(await request('/auth/v1/token?grant_type=password', {
-        method:'POST', data:{email:ownerSlug ? values.email.trim() : (values.email.trim().toLowerCase() === 'enuxespro' ? adminEmail : values.email.trim()),password:values.password}
+        method:'POST', data:{email:ownerSlug ? (values.email.includes('@') ? values.email.trim() : values.email.trim().toLowerCase()+'@owners.enuxes.com') : (values.email.trim().toLowerCase() === 'enuxespro' ? adminEmail : values.email.trim()),password:values.password}
       }));
     } else if (form.id === 'main-admin-password') {
       const status = document.getElementById('password-result');
@@ -313,10 +318,10 @@ document.addEventListener('submit', async event => {
       toast('Advertising settings saved.');
       return;
     } else if (form.id === 'main-admin-create') {
-      await adminRequest('platform_create_business', {
-        p_slug:values.slug, p_name:values.name, p_type:values.type,
-        p_package:values.package, p_description:values.description.trim(), p_active:Boolean(values.active)
-      });
+      await request('/functions/v1/provision-store',{method:'POST',token:await getSessionToken(),data:{
+        slug:values.slug,name:values.name,type:values.type,plan:values.package,description:values.description.trim(),active:Boolean(values.active),
+        ownerName:values.ownerName,username:values.username,password:values.ownerPassword
+      }});
       section = 'stores';
       storeQuery = storeStatus = '';
       modal.close();
@@ -348,7 +353,7 @@ const workspaceBrand = '<a class="workspace-brand" href="/"><img src="/enuxes-lo
 
 function ownerDashboard() {
   const store = ownerStore;
-  const tabs = ['Overview','Orders','Inventory','Notifications','Store settings','Support'];
+  const tabs = ['Overview','Orders','Inventory','Notifications','Products','Business profile','Store builder','Store settings','Account','Support'];
   app.innerHTML = '<div class="admin-layout"><aside class="panel admin-sidebar">' + workspaceBrand + '<small>STORE OWNER</small>'
     + '<div class="admin-sections" aria-label="Store tools">' + tabs.map(tab => '<button data-owner-tab="' + tab + '" class="' + (tab===ownerTab?'active':'') + '">' + tab + '</button>').join('') + '</div></aside>'
     + '<section class="stack"><header class="row workspace-top"><div><small>' + esc(store.name) + '</small><h2>' + ownerTab + '</h2></div><div class="toolbar"><button data-owner-tab="Notifications">Notifications <span id="owner-alert-count"></span></button><button id="admin-signout">Sign out</button></div></header><div id="owner-content" class="stack"></div></section></div>';
@@ -366,6 +371,7 @@ async function renderOwnerTab() {
   const target = document.getElementById('owner-content');
   const token = await getSessionToken();
   const byStore = '&business_id=eq.' + store.id;
+  if (['Account','Products','Business profile','Store builder'].includes(tab)) return ownerEditor(tab,target,token);
   if (tab === 'Support') {
     target.innerHTML = '<div class="panel"><h2>Support</h2><p>Chat with the eNuxes team about this store.</p><button data-support="' + store.id + '">Open conversation</button></div>';
     return;
@@ -484,6 +490,7 @@ async function boot() {
     storeBanner = ads[0] || null;
     const [theme] = await request('/rest/v1/store_themes?select=accent&business_id=eq.' + business.id).catch(()=>[]);
     applyStoreTheme(theme?.accent);
+    publishedContent = await contentFor(business.id).catch(()=>null);
     storefront();
   } catch { app.innerHTML = '<h2>Temporarily unavailable</h2><p>Refresh the page to try again.</p>'; }
 }
