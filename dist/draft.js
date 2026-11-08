@@ -41,18 +41,10 @@ async function renderDraftChecklist(target,token){
   try{
    const pending=await load(true);
    if(pending.length){await renderDraftChecklist(target,await getSessionToken());return;}
-   ownerTab='My Store';await refreshDashboard();toast('Your store is published.');
+   ownerTab='Profile';await refreshDashboard();toast('Your store is published.');
   }catch(error){status.textContent=error.message;button.disabled=false;}
  };
 }
-function renderSharedOwnerPreview(target){
- const store=ownerStore;
- const editorUrl='/'+encodeURIComponent(store.slug)+'?owner-preview=1';
- target.innerHTML='<div class="toolbar"><a class="button primary" href="'+editorUrl+'">Edit Store</a><button data-owner-tab="Business profile">Edit profile</button><button data-owner-tab="Products">Add or edit products</button><button data-owner-tab="Home Layout">Layout and colours</button>'
-  +(store.active?'<a class="button" href="/'+esc(store.slug)+'">View live store ↗</a>':store.owner_published_at?'':'<button class="primary" data-owner-tab="Ready to Publish">Publish Store</button>')+'</div>'
-  +'<iframe class="draft-store-preview" title="Storefront preview" src="'+editorUrl+'&amp;embedded=1"></iframe>';
-}
-
 const embeddedOwnerPreview=new URLSearchParams(location.search).get('embedded')==='1'&&window.parent!==window;
 function canEditInlineStore(){
  return storefrontPreview&&!embeddedOwnerPreview;
