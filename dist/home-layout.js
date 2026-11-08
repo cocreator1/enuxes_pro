@@ -122,7 +122,7 @@ async function ownerHomeLayout(target,token){
  form.onsubmit=async event=>{
   event.preventDefault();const button=form.querySelector('button.primary'),snapshot=structuredClone(settings);
   button.disabled=true;status.textContent='Saving…';
-  try{await request('/rest/v1/rpc/save_owner_home',{method:'POST',token:await getSessionToken(),data:{p_store:store.id,p_settings:snapshot}});status.textContent=JSON.stringify(snapshot)===JSON.stringify(settings)?'Saved.':'Saved earlier changes. New edits are unsaved.';sendPreview();}
+  try{await request('/rest/v1/rpc/save_owner_home',{method:'POST',token:await getSessionToken(),data:{p_store:store.id,p_settings:snapshot}});signalStorefrontSave(store.slug);status.textContent=JSON.stringify(snapshot)===JSON.stringify(settings)?'Saved.':'Saved earlier changes. New edits are unsaved.';sendPreview();}
   catch(error){status.textContent=error.message;}finally{button.disabled=false;}
  };
  render();contrast();
