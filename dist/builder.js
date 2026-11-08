@@ -337,3 +337,85 @@ async function ownerStorePreview(target,token) {
   });
   render();
 }
+
+const trendoraColours={
+ surface:'#F7F8F3',card:'#FFFFFF',sage:'#E3ECDB',photo:'#C6D4BB',primary:'#075C3A',
+ buy:'#545A13',ink:'#13251B',muted:'#56645A',border:'#D8E2D4'
+};
+const trendoraCollections=['Hoodies & Sweats','Everyday Basics','Outerwear','Sale'];
+const trendoraCover={ 'Hoodies & Sweats':'hoodie','Everyday Basics':'tee',Outerwear:'puffer',Sale:'desert' };
+const trendoraAsset=name=>'https://www.enuxes.com/trendora-media/'+name+'.webp';
+
+async function trendoraMerchEditor(target,token){
+ const content=await contentFor(ownerStore.id,token);
+ const merch=content.merchandising||{};
+ const rows=await request('/rest/v1/products?select=id,name,category&business_id=eq.'+ownerStore.id+'&order=name',{token});
+ const all=[...new Set([...trendoraCollections,...rows.map(p=>p.category).filter(Boolean),...(merch.collections||[]).map(c=>c.name)])];
+ const collections=[...(merch.collections||[]),...all.filter(name=>!(merch.collections||[]).some(c=>c.name===name)).map(name=>({name,enabled:true,cover:trendoraCover[name]?trendoraAsset(trendoraCover[name]):''}))];
+ if(!target.isConnected)return;
+ target.innerHTML='<div class="panel"><h2>Trendora merchandising</h2><form id="trendora-merch">'+field('Sale banner title','bannerTitle',merch.bannerTitle||'Mid-season sale',100)
+  +field('Banner image URL','bannerImage',merch.bannerImage||trendoraAsset('desert'),2048,'url')+uploadField('bannerUpload')
+  +field('Banner destination (blank opens Sale)','bannerLink',merch.bannerLink,2048,'url')
+  +'<label><span><input type="checkbox" name="bannerEnabled" '+(merch.bannerEnabled===false?'':'checked')+'> Show banner</span></label>'
+  +'<div class="row">'+Object.entries(trendoraColours).map(([key,fallback])=>'<label>'+key+'<input name="theme-'+key+'" type="color" value="'+esc(/^#[a-f0-9]{6}$/i.test(merch.palette?.[key])?merch.palette[key]:fallback)+'"></label>').join('')+'</div>'
+  +'<fieldset><legend>Featured products</legend>'+rows.map(p=>'<label><span><input name="featured" type="checkbox" value="'+p.id+'" '+((merch.featured||[]).includes(p.id)?'checked':'')+'> '+esc(p.name)+'</span></label>').join('')+'</fieldset>'
+  +'<fieldset><legend>Collections</legend>'+collections.map((c,i)=>'<div class="panel stack"><strong>'+esc(c.name)+'</strong>'
+  +'<label><span><input type="checkbox" name="visible-'+i+'" '+(c.enabled===false?'':'checked')+'> Published</span></label>'
+  +'<label>Display order<input type="number" name="order-'+i+'" min="0" max="999" step="1" required value="'+i+'"></label>'
+  +field('Cover URL','cover-'+i,c.cover,2048,'url')+uploadField('cover-upload-'+i)+'</div>').join('')+'</fieldset>'
+  +'<button class="primary">Save merchandising</button><p role="status"></p></form></div>';
+ const form=target.querySelector('form');
+ form.onsubmit=async event=>{
+  event.preventDefault();
+  const button=form.querySelector('button'),status=form.querySelector('[role=status]'), data=new FormData(form);
+  const val=key=>String(data.get(key)||'').trim();
+  const validUrl=url=>{if(url&&!safeImage(url))throw new Error('Use HTTPS image and destination links.');return url;};
+  button.disabled=true;status.textContent='Saving…';
+  try{
+   const [banner]=await uploadMedia(data.getAll('bannerUpload'));
+   const configured=await Promise.all(collections.map(async(c,i)=>{
+    const [upload]=await uploadMedia(data.getAll('cover-upload-'+i));
+    return {name:c.name,enabled:data.has('visible-'+i),cover:upload||validUrl(val('cover-'+i)),position:Number(val('order-'+i))};
+   }));
+   await updateContent(ownerStore.id,{merchandising:{
+    bannerTitle:val('bannerTitle'),bannerImage:banner||validUrl(val('bannerImage')),bannerLink:validUrl(val('bannerLink')),bannerEnabled:data.has('bannerEnabled'),
+    featured:data.getAll('featured'),palette:Object.fromEntries(Object.keys(trendoraColours).map(k=>[k,val('theme-'+k)])),
+    collections:configured.sort((a,b)=>a.position-b.position)
+   }},await getSessionToken());
+   status.textContent='Saved. The storefront will refresh automatically.';
+  }catch(error){status.textContent=error.message;}finally{button.disabled=false;}
+ };
+}
+
+async function trendoraDeliveryEditor(target,token){
+ const [settings]=await request('/rest/v1/business_settings?select=delivery_fee_minor,delivery_enabled&business_id=eq.'+ownerStore.id,{token});
+ if(!settings)throw new Error('Delivery settings are unavailable.');
+ target.innerHTML='<div class="panel"><h2>Demo delivery</h2><form><label>Delivery fee (N$)<input name="fee" type="number" min="0" max="21474836.47" step=".01" required value="'+settings.delivery_fee_minor/100+'"></label><label><span><input name="enabled" type="checkbox" '+(settings.delivery_enabled?'checked':'')+'> Accept demo delivery orders</span></label><button class="primary">Save delivery</button><p role="status"></p></form></div>';
+ const form=target.querySelector('form');
+ form.onsubmit=async event=>{
+  event.preventDefault();const status=form.querySelector('[role=status]'),button=form.querySelector('button'),data=new FormData(form);
+  button.disabled=true;status.textContent='Saving…';
+  try{
+   const rows=await request('/rest/v1/business_settings?business_id=eq.'+ownerStore.id,{method:'PATCH',token:await getSessionToken(),prefer:'return=representation',data:{delivery_enabled:data.has('enabled'),delivery_fee_minor:Math.round(Number(data.get('fee'))*100)}});
+   if(rows?.length!==1)throw new Error('Delivery settings were not saved.');
+   status.textContent='Delivery settings saved.';
+  }catch(error){status.textContent=error.message;}finally{button.disabled=false;}
+ };
+}
+
+function renderTrendoraOrders(target,orders){
+ const statuses=['NEW','CONFIRMED','PROCESSING','OUT FOR DELIVERY','COMPLETED','CANCELLED'];
+ target.innerHTML=orders.map(o=>'<article class="panel stack"><h3>#'+esc(o.id.slice(0,8).toUpperCase())+' · '+money(o.total_minor/100)+'</h3><p>'+esc(o.customer_name)+' · '+esc(o.mobile)+'<br>'+esc(o.address)+'</p>'
+  +'<ul>'+(o.order_items||[]).map(line=>'<li>'+line.quantity+' × '+esc(line.product_name)+' '+esc([line.size,line.colour].filter(Boolean).join(' / '))+'</li>').join('')+'</ul>'
+  +'<form data-trendora-order="'+o.id+'"><label>Fulfilment<select name="status">'+[...new Set([...statuses,o.status])].map(s=>'<option '+(s===o.status?'selected':'')+'>'+esc(s)+'</option>').join('')+'</select></label><button class="primary">Save status</button><p role="status"></p></form></article>').join('')||'<div class="panel">No recorded orders.</div>';
+}
+document.addEventListener('submit',async event=>{
+ const form=event.target;if(!form.dataset.trendoraOrder)return;
+ event.preventDefault();const button=form.querySelector('button'),status=form.querySelector('[role=status]');
+ button.disabled=true;status.textContent='Saving…';
+ try{
+  const rows=await request('/rest/v1/orders?id=eq.'+form.dataset.trendoraOrder+'&business_id=eq.'+ownerStore.id,{method:'PATCH',token:await getSessionToken(),prefer:'return=representation',data:{status:new FormData(form).get('status')}});
+  if(rows?.length!==1)throw new Error('Order status was not saved.');
+  status.textContent='Order status saved.';
+ }catch(error){status.textContent=error.message;}finally{button.disabled=false;}
+});

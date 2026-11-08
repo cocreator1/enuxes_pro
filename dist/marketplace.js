@@ -4,7 +4,7 @@ const sortMarket=(stores,rows)=>stores.slice().sort((a,b)=>marketRank(rows,a.id)
 
 async function marketplace(){
   const [stores,order,banners]=await Promise.all([
-    request('/rest/v1/businesses?select='+businessColumns+'&active=eq.true'),
+    request('/rest/v1/businesses?select='+businessColumns+'&active=eq.true&marketplace_listed=eq.true'),
     request(marketPath+'store_order?select=business_id,position'),
     request(marketPath+'banners?select=id,title,image_url,link_url&enabled=eq.true&order=position,id')
   ]);
@@ -40,7 +40,7 @@ async function marketplaceAdmin(target){
     request(marketPath+'banners?select=*&order=position,id',{token})
   ]);
   if(!target.isConnected)return;
-  const stores=sortMarket(adminStores.filter(store=>store.lifecycle==='active'),new Map(ranks.map(row=>[row.business_id,row.position])));
+  const stores=sortMarket(adminStores.filter(store=>store.lifecycle==='active'&&store.id!=='a0100000-0000-4000-8000-000000000001'),new Map(ranks.map(row=>[row.business_id,row.position])));
   target.innerHTML='<section class="panel stack"><div class="row"><h2>Marketplace banners</h2><button data-market-banner="new">Add banner</button></div><div id="market-banner-list"></div></section>'
     +'<section class="panel stack"><h2>Homepage store order</h2><p>Move stores up or down. Newly activated stores appear after your ordered list.</p><div id="market-order"></div><div><button class="primary" id="market-save-order">Save store order</button></div><p role="status" id="market-order-status"></p></section>';
   let banners=initialBanners;

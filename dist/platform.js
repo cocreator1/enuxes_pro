@@ -367,7 +367,7 @@ const workspaceBrand = '<a class="workspace-brand" href="/"><img src="/enuxes-lo
 
 function ownerDashboard() {
   const store = ownerStore;
-  const tabs = ['My Store','Orders','Inventory','Products','Store builder','Profile'];
+  const tabs = ['My Store','Orders','Inventory','Products','Store builder',...(store.slug==='trendora'?['Merchandising','Delivery']:[]),'Profile'];
   const selected = ownerProfileTabs.includes(ownerTab) ? 'Profile' : ownerTab;
   app.innerHTML = '<div class="admin-layout"><aside class="panel admin-sidebar">' + workspaceBrand + '<small>STORE OWNER</small>'
     + '<div class="admin-sections" aria-label="Store tools">' + tabs.map(tab => '<button data-owner-tab="' + tab + '" class="' + (tab===selected?'active':'') + '">' + tab + '</button>').join('') + '</div></aside>'
@@ -387,6 +387,15 @@ async function renderOwnerTab() {
   const target = document.getElementById('owner-content');
   const token = await getSessionToken();
   const byStore = '&business_id=eq.' + store.id;
+  if(store.slug==='trendora'){
+    if(tab==='Merchandising')return trendoraMerchEditor(target,token);
+    if(tab==='Delivery')return trendoraDeliveryEditor(target,token);
+    if(tab==='Orders'){
+      const rows=await request('/rest/v1/orders?select=id,status,total_minor,customer_name,mobile,address,order_items(product_name,size,colour,quantity)&order=created_at.desc&limit=30'+byStore,{token});
+      if(target.isConnected&&!target.querySelector('form'))renderTrendoraOrders(target,rows);
+      return;
+    }
+  }
   if (tab==='My Store') return ownerStorePreview(target,token);
   if (tab==='Profile') {
     target.innerHTML='<section class="panel stack"><h2>Profile</h2><p>Manage your store identity, appearance, password and support.</p><div class="toolbar">'
@@ -474,6 +483,38 @@ function applyStoreTheme(accent) {
   document.body.style.setProperty('--shop-ink',luminance<=.183?accent:'color-mix(in srgb, '+accent+' 44%, black)');
 }
 
+async function readStorefront(slug){
+  const [store]=await request('/rest/v1/businesses?select='+businessColumns+'&active=eq.true&slug=eq.'+slug);
+  if(!store)return null;
+  const filter='&business_id=eq.'+store.id;
+  const [products,ads,themes,content]=await Promise.all([
+    request('/rest/v1/products?select=id,business_id,name,category,description,image_url,price_minor,sale_price_minor,gallery,sizes,colours,stock,active&active=eq.true&order=id'+filter),
+    request('/rest/v1/store_ad_settings?select=title,image_url,destination_url'+filter),
+    request('/rest/v1/store_themes?select=accent'+filter),
+    contentFor(store.id)
+  ]);
+  return {store,products,ad:ads[0]||null,accent:themes[0]?.accent,content};
+}
+
+let storefrontVersion;
+function applyStorefront(snapshot){
+  business=snapshot.store;
+  db.products=snapshot.products.map(p=>({...p,businessId:p.business_id,price:p.price_minor/100,sale:p.sale_price_minor/100,image:safeImage(p.image_url)}));
+  storeBanner=snapshot.ad;
+  publishedContent=snapshot.content;
+  applyStoreTheme(snapshot.accent);
+  if(isTrendora()){
+    const palette=publishedContent.merchandising?.palette||{};
+    for(const [key,fallback] of Object.entries(trendoraColours)){
+      const value=/^#[a-f0-9]{6}$/i.test(palette[key])?palette[key]:fallback;
+      document.body.style.setProperty('--trendora-'+key,value);
+    }
+    document.body.style.setProperty('--shop-ink',/^#[a-f0-9]{6}$/i.test(palette.primary)?palette.primary:(snapshot.accent||trendoraColours.primary));
+    document.body.style.setProperty('--shop-tint',/^#[a-f0-9]{6}$/i.test(palette.sage)?palette.sage:trendoraColours.sage);
+  }
+  storefrontVersion=JSON.stringify(snapshot);
+}
+
 async function boot() {
   nav.innerHTML = '<a class="brand" href="/"><img src="/enuxes-logo.svg" width="34" height="34" alt="">eNuxes</a><a href="/">Businesses</a>';
   document.querySelector('footer').textContent = 'eNuxes · Commerce & hospitality';
@@ -496,22 +537,9 @@ async function boot() {
       app.innerHTML = '<h2>Page unavailable</h2><a href="/">Browse businesses</a>';
       return;
     }
-    const stores = await request('/rest/v1/businesses?select=' + businessColumns + '&active=eq.true&slug=eq.' + parts[0]);
-    if (!stores.length) {
-      app.innerHTML = '<h2>Store unavailable</h2><a href="/">Browse businesses</a>';
-      return;
-    }
-    business = stores[0];
-    const products = await request('/rest/v1/products?select=id,business_id,name,category,description,image_url,price_minor,sale_price_minor,gallery,sizes,colours,stock,active&active=eq.true&business_id=eq.' + business.id);
-    db.products = products.map(p => ({
-      ...p, businessId:p.business_id, price:p.price_minor/100, sale:p.sale_price_minor/100,
-      image:/^https:\/\//i.test(p.image_url || '') ? p.image_url : ''
-    }));
-    const ads = await request('/rest/v1/store_ad_settings?select=title,image_url,destination_url&business_id=eq.' + business.id).catch(()=>[]);
-    storeBanner = ads[0] || null;
-    const [theme] = await request('/rest/v1/store_themes?select=accent&business_id=eq.' + business.id).catch(()=>[]);
-    applyStoreTheme(theme?.accent);
-    publishedContent = await contentFor(business.id).catch(()=>null);
+    const snapshot=await readStorefront(parts[0]);
+    if(!snapshot){app.innerHTML='<h2>Store unavailable</h2><a href="/">Browse businesses</a>';return;}
+    applyStorefront(snapshot);
     await startShop();
   } catch { app.innerHTML = '<h2>Temporarily unavailable</h2><p>Refresh the page to try again.</p>'; }
 }

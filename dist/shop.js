@@ -9,7 +9,24 @@ const shopIcons={
 };
 const shopIcon=name=>'<svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round">'+shopIcons[name]+'</svg>';
 let shopPage='home',shopFilter='',shopSearch='',shopOnlyFav=false,shopOnlySale=false,shopInfo={},shopCart=[],shopFav=[],shopDevice,shopRequest;
-let checkoutInFlight=false;
+let checkoutInFlight=false, instantOrder=null, shopSort='', shopStock=false, shopSize='';
+const isTrendora=()=>business?.id==='a0100000-0000-4000-8000-000000000001';
+const shopUnit=p=>p.sale_price_minor||p.price_minor;
+const orderTotal=lines=>lines.reduce((sum,line)=>sum+shopUnit(getProduct(line.id))*line.quantity,0);
+function showCheckout(lines,key,buyNow=false){
+ if(!lines.length||!shopInfo.collection)return;
+ if(lines.some(line=>!getProduct(line.id)))return toast('An item is no longer available.');
+ const fee=isTrendora()?shopInfo.delivery_fee:0;
+ if(isTrendora()&&fee==null)return toast('Demo delivery is unavailable.');
+ const total=orderTotal(lines)+(fee||0);
+ instantOrder={lines:structuredClone(lines),key,buyNow,total};
+ modal.className='shop-sheet';
+ openDialog('Checkout','<form id="shop-order"><p>'+(isTrendora()?'Demo delivery order · No payment is collected.':'Pay when you collect your order.')+' <strong>'+money(total/100)+'</strong></p>'
+  +'<label>Name<input name="name" autocomplete="name" maxlength="100" required></label><label>Mobile<input name="mobile" type="tel" autocomplete="tel" minlength="5" maxlength="30" required></label>'
+  +(isTrendora()?'<label>Sample delivery address<input name="address" minlength="5" maxlength="250" autocomplete="street-address" required></label>':'')
+  +'<button class="primary">'+(isTrendora()?'Place demo order':'Place collection order')+'</button><p role="status"></p></form>');
+}
+
 const cartKey=()=> 'enuxes-shop-'+business.id;
 function loadSaved(key,fallback){try{return JSON.parse(localStorage.getItem(key))??fallback;}catch{return fallback;}}
 function saveShop(){try{localStorage.setItem(cartKey(),JSON.stringify({cart:shopCart,fav:shopFav,request:shopRequest}));}catch{}}
@@ -20,30 +37,43 @@ function shopCard(p){return '<article class="shop-card"><button class="shop-phot
  +'<button class="shop-heart '+(shopFav.includes(p.id)?'liked':'')+'" data-fav="'+p.id+'" aria-label="Favourite '+esc(p.name)+'" aria-pressed="'+shopFav.includes(p.id)+'">'+shopIcon('heart')+'</button>'
  +'<div class="shop-card-copy"><button data-item="'+p.id+'">'+esc(p.name)+'</button><div>'+shopPrice(p)+'</div></div></article>';}
 function searchBox(){return '<label class="shop-search">'+shopIcon('search')+'<input id="shop-search" type="search" placeholder="Search products" aria-label="Search products" value="'+esc(shopSearch)+'"></label>';}
-function filteredItems(){return shopItems().filter(p=>(!shopFilter||p.category===shopFilter)&&(!shopOnlyFav||shopFav.includes(p.id))&&(!shopOnlySale||p.sale)&&[p.name,p.category,p.description].join(' ').toLowerCase().includes(shopSearch.toLowerCase()));}
+function filteredItems(){const rows=shopItems().filter(p=>(!shopStock||p.stock!==0)&&(!shopSize||p.sizes?.includes(shopSize))).filter(p=>(!shopFilter||p.category===shopFilter)&&(!shopOnlyFav||shopFav.includes(p.id))&&(!shopOnlySale||p.sale)&&[p.name,p.category,p.description].join(' ').toLowerCase().includes(shopSearch.toLowerCase()));
+ return shopSort==='low'?rows.sort((a,b)=>shopUnit(a)-shopUnit(b)):shopSort==='high'?rows.sort((a,b)=>shopUnit(b)-shopUnit(a)):rows;
+}
 function updateShopGrid(){const grid=document.getElementById('shop-grid');if(grid)grid.innerHTML=filteredItems().map(shopCard).join('')||'<p>No matching products.</p>';}
 const collections=()=>[...new Set(shopItems().map(p=>p.category).filter(Boolean))];
 function shopNav(){return '<nav class="shop-tabs" aria-label="Store navigation">'+[['home','Home'],['shop','Shop'],['catalogue','Catalogue'],['cart','Cart']].map(([key,label])=>'<button data-shop-page="'+key+'" '+(shopPage===key?'aria-current="page"':'')+'>'+shopIcon(key)+'<span>'+label+(key==='cart'&&shopCart.length?' · '+shopCart.reduce((n,line)=>n+line.quantity,0):'')+'</span></button>').join('')+'</nav>';}
+function shopPills(){return '<div class="shop-pills">'+[['','All'],...collections().map(c=>[c,c])].map(([id,label])=>'<button data-collection="'+esc(id)+'" aria-pressed="'+(shopFilter===id&&!shopOnlySale)+'">'+esc(label)+'</button>').join('')+'</div>';}
 function renderShop(){
- const items=shopItems(), profile=publishedContent||{};
+ const items=shopItems(), profile=publishedContent||{}, merch=isTrendora()?(profile.merchandising||{}):{};
  let body='';
  if(shopPage==='home'){
-  const featured=items.slice(0,4);
+  const featured=merch.featured?.length?items.filter(p=>merch.featured.includes(p.id)):items.slice(0,4);
+  const saleBanner=merch.bannerEnabled===false?'':items.some(p=>p.sale)?'<div class="shop-sale-wrap">'+(safeImage(merch.bannerImage)?imageTag(merch.bannerImage,''):'')
+   +(safeImage(merch.bannerLink)?'<a class="shop-sale" href="'+esc(merch.bannerLink)+'">':'<button class="shop-sale" data-shop-sale>')
+   +'<strong>'+esc(merch.bannerTitle||(isTrendora()?'Mid-season sale':'Store sale'))+'</strong><span>Browse discounted products →</span>'+(safeImage(merch.bannerLink)?'</a>':'</button>')+'</div>':'';
   body='<section class="shop-profile">'+(imageTag(profile.logo,business.name)||'<div class="shop-avatar">'+esc(business.name.slice(0,1).toUpperCase())+'</div>')
    +'<h1>'+esc(business.name)+'</h1><small>on eNuxes</small><p>'+esc(business.description)+'</p>'
    +'<button id="shop-follow" aria-pressed="'+Boolean(shopInfo.following)+'">'+shopIcon('people')+' '+(shopInfo.following?'Following':'Follow')+(Number.isFinite(Number(shopInfo.followers))?' · '+Number(shopInfo.followers).toLocaleString()+' followers':'')+'</button>'
    +([profile.category,profile.email,profile.phone].some(Boolean)?'<p class="muted">'+[profile.category,profile.email,profile.phone].filter(Boolean).map(esc).join(' · ')+'</p>':'')+'</section>'
-   +(items.some(p=>p.sale)?'<button class="shop-sale" data-shop-sale><strong>Store sale</strong><span>Browse discounted products →</span></button>':'')
-   +bannerHtml()+searchBox()+'<div id="browse" class="row shop-heading"><h2>Featured</h2><button data-shop-page="shop">See all</button></div><div class="shop-grid" id="products">'+(featured.map(shopCard).join('')||'<p>No products yet.</p>')+'</div>';
+   +saleBanner
+   +bannerHtml()+searchBox()+shopPills()+'<div id="browse" class="row shop-heading"><h2>Featured</h2><button data-shop-page="shop">See all</button></div><div class="shop-grid" id="products">'+(featured.map(shopCard).join('')||'<p>No products yet.</p>')+'</div>';
  }else if(shopPage==='shop'){
   body='<div class="shop-heading"><h2>Shop all products</h2><p class="muted">Browse the collection</p></div>'+searchBox()
    +'<div class="shop-filters"><label>Category<select id="shop-category"><option value="">All products</option>'+collections().map(c=>'<option value="'+esc(c)+'" '+(shopFilter===c?'selected':'')+'>'+esc(c)+'</option>').join('')+'</select></label>'
-   +'<button data-shop-filter="fav" aria-pressed="'+shopOnlyFav+'">'+shopIcon('heart')+' Favourites</button><button data-shop-filter="sale" aria-pressed="'+shopOnlySale+'">Sale</button></div><div class="shop-grid" id="shop-grid"></div>';
+   +'<label>Sort<select id="shop-sort"><option value="">Default</option><option value="low" '+(shopSort==='low'?'selected':'')+'>Price low to high</option><option value="high" '+(shopSort==='high'?'selected':'')+'>Price high to low</option></select></label>'
+   +'<button data-shop-filter="fav" aria-pressed="'+shopOnlyFav+'">'+shopIcon('heart')+' Favourites</button><button data-shop-filter="sale" aria-pressed="'+shopOnlySale+'">Sale</button><button data-shop-filter="stock" aria-pressed="'+shopStock+'">In stock</button><button data-shop-filter="clear">Clear filters</button></div>'+shopPills()+'<div class="shop-grid" id="shop-grid"></div>';
  }else{
-  const groups=collections().map(c=>[c,items.find(p=>p.category===c&&p.image)]);
-  if(items.some(p=>p.sale))groups.push(['Sale',items.find(p=>p.sale&&p.image)]);
+  const names=collections();
+  if(items.some(p=>p.sale))names.push('Sale');
+  const configured=Array.isArray(merch.collections)?merch.collections:[];
+  const ordered=isTrendora()?[...new Set([...configured.map(c=>c.name),...trendoraCollections,...names])]:names;
+  const groups=ordered.filter(name=>names.includes(name)&&configured.find(c=>c.name===name)?.enabled!==false).map(name=>{
+    const cover=configured.find(c=>c.name===name)?.cover;
+    return [name,safeImage(cover)||(isTrendora()&&trendoraCover[name]?trendoraAsset(trendoraCover[name]):items.find(p=>p.category===name&&p.image)?.image)];
+  });
   body='<div class="shop-heading"><h2>Catalogue</h2><p class="muted">Browse our collections</p></div><div class="shop-collections">'
-   +(groups.map(([name,p],index)=>'<button class="shop-collection" '+(index>=collections().length?'data-shop-sale':'data-collection="'+esc(name)+'"')+'>'+(p?imageTag(p.image):'')+'<strong>'+esc(name)+'</strong><span aria-hidden="true">›</span></button>').join('')||'<p>No collections yet.</p>')+'</div>';
+   +(groups.map(([name,cover])=>'<button class="shop-collection" '+(name==='Sale'?'data-shop-sale':'data-collection="'+esc(name)+'"')+'>'+(cover?imageTag(cover):'')+'<strong>'+esc(name)+'</strong><span aria-hidden="true">›</span></button>').join('')||'<p>No collections yet.</p>')+'</div>';
  }
  app.innerHTML='<div class="shop-frame"><div class="shop-content">'+body+'</div>'+shopNav()+'</div>';
  if(shopPage==='shop')updateShopGrid();
@@ -55,7 +85,7 @@ function detail(id){
  const options=(name,list)=>list?.length?'<fieldset><legend>'+name+'</legend><div class="shop-options">'+list.map((option,i)=>'<label><input type="radio" name="'+name+'" value="'+esc(option)+'" '+(i?'':'checked')+'><span>'+esc(option)+'</span></label>').join('')+'</div></fieldset>':'';
  const photos=[p.image,...(Array.isArray(p.gallery)?p.gallery:[])].filter(safeImage);
  modal.className='shop-detail';
- openDialog('Details','<div class="shop-detail-photo">'+(photos.length?photos.map(url=>imageTag(url,p.name)).join(''):shopPicture(p))+'</div>'
+ openDialog('Details','<div class="shop-detail-photo">'+(photos.length?imageTag(photos[0],p.name):shopPicture(p))+'</div>'+(photos.length>1?'<div class="shop-thumbs">'+photos.map((url,i)=>'<button data-detail-photo="'+esc(url)+'" aria-label="View photo '+(i+1)+'">'+imageTag(url)+'</button>').join('')+'</div>':'')
   +'<form id="shop-item" data-id="'+p.id+'"><div class="row"><h2>'+esc(p.name)+'</h2><button type="button" data-fav="'+p.id+'" aria-label="Favourite" aria-pressed="'+shopFav.includes(p.id)+'">'+shopIcon('heart')+'</button></div><div class="shop-detail-price">'+shopPrice(p)+'</div>'
   +options('Colour',p.colours)+options('Size',p.sizes)
   +'<label>Quantity <div class="shop-step"><button type="button" data-detail-step="-1" aria-label="Decrease quantity">−</button><input name="quantity" type="number" min="1" max="'+Math.min(99,p.stock??99)+'" value="1" aria-label="Quantity" required><button type="button" data-detail-step="1" aria-label="Increase quantity">+</button></div></label>'
@@ -64,11 +94,12 @@ function detail(id){
 
 function showCart(){
  modal.className='shop-sheet';
- const subtotal=shopCart.reduce((sum,line)=>sum+price(getProduct(line.id))*line.quantity,0);
+ const subtotal=orderTotal(shopCart)/100;
+ const fee=isTrendora()?shopInfo.delivery_fee:0;
  openDialog('My cart',shopCart.length?'<div class="shop-cart-lines">'+shopCart.map((line,i)=>{const p=getProduct(line.id);return '<article class="shop-cart-line"><div class="shop-thumb">'+shopPicture(p)+'</div><div><strong>'+esc(p.name)+'</strong><small>'+[line.size,line.colour].filter(Boolean).map(esc).join(' · ')+'</small><span>'+money(price(p)*line.quantity)+'</span></div><div class="shop-step"><button data-cart-index="'+i+'" data-cart-step="-1" aria-label="Decrease quantity">−</button><span>'+line.quantity+'</span><button data-cart-index="'+i+'" data-cart-step="1" aria-label="Increase quantity">+</button><button data-cart-index="'+i+'" data-cart-step="0" aria-label="Remove item">×</button></div></article>';}).join('')+'</div>'
- +'<div class="shop-total"><div class="row"><span>Subtotal</span>'+money(subtotal)+'</div><div class="row"><span>Collection fee</span>'+money(0)+'</div>'
- +(shopInfo.delivery_fee!=null?'<div class="row muted"><span>Delivery estimate (separate)</span>'+money(shopInfo.delivery_fee/100)+'</div>':'')
- +'<div class="row"><strong>Total for collection</strong><strong>'+money(subtotal)+'</strong></div></div>'
+ +'<div class="shop-total"><div class="row"><span>Subtotal</span>'+money(subtotal)+'</div><div class="row"><span>'+(isTrendora()?'Delivery fee':'Collection fee')+'</span>'+money((fee||0)/100)+'</div>'
+ +(!isTrendora()&&shopInfo.delivery_fee!=null?'<div class="row muted"><span>Delivery estimate (separate)</span>'+money(shopInfo.delivery_fee/100)+'</div>':'')
+ +'<div class="row"><strong>Total</strong><strong>'+money(subtotal+(fee||0)/100)+'</strong></div></div>'
  +(shopInfo.collection?'<button class="primary shop-checkout" data-shop-checkout>Checkout</button>':'<p class="notice">Collection checkout is unavailable for this store.</p>'):'<p>Your cart is empty.</p>');
 }
 
@@ -78,6 +109,7 @@ async function loadShopInfo(follow){
 }
 async function startShop(){
  document.body.classList.add('customer-shop');
+ if(isTrendora())document.body.classList.add('trendora-shop');
  document.querySelector('meta[name="viewport"]').content='width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover';
  const saved=loadSaved(cartKey(),{});
  shopCart=(Array.isArray(saved.cart)?saved.cart:[]).filter(line=>getProduct(line?.id)&&Number.isInteger(line.quantity)&&line.quantity>0&&line.quantity<=99);
@@ -88,6 +120,46 @@ async function startShop(){
  renderShop();
  await loadShopInfo().catch(()=>{});
  if(shopPage==='home'&&!modal.open)renderShop();
+ if(isTrendora())startTrendoraRefresh();
+}
+
+
+let trendoraRefreshing=false;
+function startTrendoraRefresh(){
+ const refresh=()=>refreshTrendora().catch(()=>{});
+ setInterval(refresh,8000);
+ window.addEventListener('online',refresh);
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();});
+ modal.addEventListener('close',refresh);
+}
+async function refreshTrendora(){
+ if(trendoraRefreshing||document.hidden||modal.open||checkoutInFlight||document.activeElement?.matches('input,select,textarea'))return;
+ trendoraRefreshing=true;
+ try{
+  const [snapshot,info]=await Promise.all([readStorefront(business.slug),
+    request('/rest/v1/rpc/shop_info',{method:'POST',data:{p_business:business.id,p_device:shopDevice,p_follow:null}})]);
+  if(modal.open||checkoutInFlight||document.activeElement?.matches('input,select,textarea'))return;
+  if(!snapshot){app.innerHTML='<h2>Store unavailable</h2><a href="/">Browse businesses</a>';return;}
+  const changed=JSON.stringify(snapshot)!==storefrontVersion;
+  const infoChanged=JSON.stringify(info[0]||{})!==JSON.stringify(shopInfo);
+  if(!changed&&!infoChanged&&app.querySelector('.shop-frame'))return;
+  const before=new Map(db.products.map(p=>[p.id,shopUnit(p)]));
+  const previousFee=shopInfo.delivery_fee;
+  applyStorefront(snapshot);shopInfo=info[0]||{};
+  const remaining=new Map();
+  let cartChanged=previousFee!==shopInfo.delivery_fee&&shopCart.length>0;
+  shopCart=shopCart.flatMap(line=>{
+   const p=getProduct(line.id);
+   if(!p||(p.sizes?.length?!p.sizes.includes(line.size):line.size)||(p.colours?.length?!p.colours.includes(line.colour):line.colour)){cartChanged=true;return [];}
+   const available=remaining.get(p.id)??maxShopQuantity(p);
+   const quantity=Math.min(line.quantity,available);
+   remaining.set(p.id,available-quantity);
+   if(quantity!==line.quantity||before.get(p.id)!==shopUnit(p))cartChanged=true;
+   return quantity?[{...line,quantity}]:[];
+  });
+  if(cartChanged){saveCartChange();toast('Your cart changed. Review the latest prices and availability.');}
+  renderShop();
+ }finally{trendoraRefreshing=false;}
 }
 
 function changeShop(page){shopPage=page;renderShop();window.scrollTo(0,0);}
@@ -107,12 +179,13 @@ document.addEventListener('click',async event=>{
  const d=button.dataset;
  if(d.shopPage){if(d.shopPage==='cart')return showCart();shopSearch=shopFilter='';shopOnlySale=shopOnlyFav=false;return changeShop(d.shopPage);}
  if(d.item)return detail(d.item);
+ if(d.detailPhoto&&safeImage(d.detailPhoto)){const image=modal.querySelector('.shop-detail-photo img');if(image)image.src=d.detailPhoto;return;}
  if(d.fav){
   shopFav=shopFav.includes(d.fav)?shopFav.filter(id=>id!==d.fav):[...shopFav,d.fav];saveShop();
   if(modal.open)button.setAttribute('aria-pressed',shopFav.includes(d.fav));renderShop();return;
  }
  if(d.collection!==undefined||d.shopSale!==undefined){shopFilter=d.collection||'';shopOnlySale=d.shopSale!==undefined;shopOnlyFav=false;shopSearch='';return changeShop('shop');}
- if(d.shopFilter){if(d.shopFilter==='fav')shopOnlyFav=!shopOnlyFav;else shopOnlySale=!shopOnlySale;return renderShop();}
+ if(d.shopFilter){if(d.shopFilter==='fav')shopOnlyFav=!shopOnlyFav;else if(d.shopFilter==='sale')shopOnlySale=!shopOnlySale;else if(d.shopFilter==='stock')shopStock=!shopStock;else{shopOnlySale=shopOnlyFav=shopStock=false;shopFilter=shopSearch=shopSort=shopSize='';}return renderShop();}
  if(button.id==='shop-follow'){
   button.disabled=true;try{await loadShopInfo(!shopInfo.following);renderShop();}catch{toast('Could not update follow status.');button.disabled=false;}return;
  }
@@ -124,10 +197,7 @@ document.addEventListener('click',async event=>{
   if(!step||line.quantity+step<1)shopCart.splice(index,1);else line.quantity+=step;
   saveCartChange();renderShop();return showCart();
  }
- if(d.shopCheckout!==undefined&&shopInfo.collection&&shopCart.length){
-  const total=shopCart.reduce((sum,line)=>sum+price(getProduct(line.id))*line.quantity,0);
-  openDialog('Checkout','<form id="shop-order"><p>Pay '+money(total)+' when you collect your order.</p><label>Name<input name="name" autocomplete="name" maxlength="100" required></label><label>Mobile<input name="mobile" type="tel" autocomplete="tel" minlength="5" maxlength="30" required></label><button class="primary">Place collection order</button><p role="status"></p></form>');
- }
+ if(d.shopCheckout!==undefined)showCheckout(shopCart,shopRequest);
 });
 document.addEventListener('input',event=>{
  if(event.target.id!=='shop-search')return;
@@ -139,22 +209,31 @@ document.addEventListener('input',event=>{
   if(caret!==null)try{input.setSelectionRange(caret,caret);}catch{}
  }else updateShopGrid();
 });
-document.addEventListener('change',event=>{if(event.target.id==='shop-category'){shopFilter=event.target.value;updateShopGrid();}});
+document.addEventListener('change',event=>{if(event.target.id==='shop-category'){shopFilter=event.target.value;updateShopGrid();}if(event.target.id==='shop-sort'){shopSort=event.target.value;updateShopGrid();}});
 document.addEventListener('submit',async event=>{
  const form=event.target;if(!['shop-item','shop-order'].includes(form.id))return;
  event.preventDefault();const fields=new FormData(form);
  if(form.id==='shop-item'){
   const p=getProduct(form.dataset.id);if(!p)return;
-  try{addShopLine(p,{size:fields.get('Size'),colour:fields.get('Colour')},Number(fields.get('quantity')));
-   renderShop();if(event.submitter?.value==='buy')showCart();else{modal.close();toast('Added to cart');}
+  try{
+   const selection={size:fields.get('Size'),colour:fields.get('Colour')},quantity=Number(fields.get('quantity'));
+   if(event.submitter?.value==='buy'){
+    if(!Number.isInteger(quantity)||quantity<1||quantity>maxShopQuantity(p))throw new Error('That quantity is unavailable.');
+    showCheckout([{id:p.id,...selection,quantity}],crypto.randomUUID(),true);
+   }else{addShopLine(p,selection,quantity);renderShop();modal.close();toast('Added to cart');}
   }catch(error){toast(error.message);}return;
  }
- if(checkoutInFlight||!shopCart.length)return;
+ if(checkoutInFlight||!instantOrder)return;
  const button=form.querySelector('button');button.disabled=true;checkoutInFlight=true;
  try{
-  const id=await request('/rest/v1/rpc/shop_order',{method:'POST',data:{p_business:business.id,p_request:shopRequest,p_name:String(fields.get('name')).trim(),p_mobile:String(fields.get('mobile')).trim(),p_lines:shopCart}});
-  shopCart=[];saveCartChange();renderShop();
-  openDialog('Order placed','<p>Order <strong>#'+esc(id.slice(0,8).toUpperCase())+'</strong></p><p>Pay when you collect from '+esc(business.name)+'.</p>');
+  const order=instantOrder;
+  const data={p_request:order.key,p_name:String(fields.get('name')).trim(),p_mobile:String(fields.get('mobile')).trim(),p_lines:order.lines};
+  if(isTrendora())Object.assign(data,{p_address:String(fields.get('address')).trim(),p_total:order.total});
+  else data.p_business=business.id;
+  const id=await request('/rest/v1/rpc/'+(isTrendora()?'trendora_order':'shop_order'),{method:'POST',data});
+  if(!order.buyNow){shopCart=[];saveCartChange();}
+  instantOrder=null;renderShop();
+  openDialog('Order placed','<p>Order <strong>#'+esc(id.slice(0,8).toUpperCase())+'</strong></p><p>'+(isTrendora()?'Demo order saved. No payment was taken.':'Pay when you collect from '+esc(business.name)+'.')+'</p>');
  }catch(error){form.querySelector('[role=status]').textContent=error.message;}
  finally{checkoutInFlight=false;button.disabled=false;}
 });

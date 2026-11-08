@@ -40,3 +40,22 @@
 @keyframes shop-rise{from{transform:translateY(100%)}to{transform:translateY(0)}}
 @media(prefers-reduced-motion:reduce){.shop-sheet[open]{animation:none}}
 @media(max-width:460px){.customer-shop main{padding-inline:12px}.shop-grid{gap:8px}.shop-cart-line{grid-template-columns:48px minmax(0,1fr)}.shop-cart-line .shop-step{grid-column:2}.shop-thumb img,.shop-thumb svg{width:48px;height:48px}}
+.shop-pills{display:flex;gap:6px;overflow:auto;margin:0 0 12px;scrollbar-width:thin}
+.shop-pills button{flex:none;min-height:44px;border-radius:99px}
+.shop-pills button[aria-pressed=true]{background:var(--shop-ink,#166047);color:white}
+.shop-thumbs{display:flex;gap:8px;overflow:auto;margin-bottom:12px}
+.shop-thumbs button{padding:0;min-height:48px;min-width:48px;overflow:hidden}
+.shop-thumbs img{width:55px;height:55px;object-fit:cover;display:block}
+.trendora-shop{background:#f7f8f3;color:#13251b;--border:#d8e2d4}
+.trendora-shop .shop-photo{background:#c6d4bb}
+.trendora-shop .shop-cta button[value=buy]{background:#545a13;border-color:#545a13}
+.trendora-shop .shop-sale{background:linear-gradient(90deg,#263d23e8,#263d2333),url('/trendora-media/desert.webp') center/cover}
+.trendora-shop{background:var(--trendora-surface,#f7f8f3);color:var(--trendora-ink,#13251b);--border:var(--trendora-border,#d8e2d4)}
+.trendora-shop .muted{color:var(--trendora-muted,#56645a)}
+.trendora-shop .shop-card,.trendora-shop .shop-tabs,.trendora-shop dialog{background:var(--trendora-card,#fff)}
+.trendora-shop .shop-photo{background:var(--trendora-photo,#c6d4bb)}
+.trendora-shop .shop-cta button[value=buy]{background:var(--trendora-buy,#545a13);border-color:var(--trendora-buy,#545a13)}
+.shop-sale-wrap{position:relative;border-radius:18px;overflow:hidden;margin-bottom:15px}
+.shop-sale-wrap>img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none}
+.shop-sale-wrap>.shop-sale{position:relative;margin:0}
+.shop-sale-wrap:has(>img)>.shop-sale{background:linear-gradient(90deg,#13251beb,#13251b44)}
