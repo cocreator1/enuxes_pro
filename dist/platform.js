@@ -431,7 +431,7 @@ function ownerDashboard() {
   const selected = ownerProfileTabs.includes(ownerTab) ? 'Profile' : ownerTab;
   app.innerHTML = '<div class="admin-layout owner-dashboard"><aside class="panel admin-sidebar">' + '<label class="workspace-brand owner-brand"><img src="/enuxes-lockup.svg" alt=""><span>Upload logo</span><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" aria-label="Upload store logo"></label><small class="owner-brand-status" role="status"></small><small>STORE OWNER</small>'
     + '<nav class="admin-sections" aria-label="Store tools">' + tabs.map(tab => '<button ' + (tab==='My Store'?'data-owner-storefront':'data-owner-tab="'+tab+'"') + (tab===selected?' class="active" aria-current="page"':'') + '>' + tab + '</button>').join('') + '</nav></aside>'
-    + '<section class="stack"><header class="row workspace-top"><div><small>' + esc(store.name) + '</small><h2>' + ownerTab + '</h2></div><div class="toolbar"><button data-owner-tab="Notifications">Notifications <span id="owner-alert-count"></span></button><button id="admin-signout">Sign out</button></div></header><div id="owner-content" class="stack"></div></section></div>' + ownerSettingsNav(store.slug);
+    + '<section class="stack"><header class="row workspace-top"><div><small>' + esc(store.name) + '</small><h2>' + ownerTab + '</h2></div><div class="toolbar"><button data-owner-tab="Notifications">Notifications <span id="owner-alert-count"></span></button></div></header><div id="owner-content" class="stack"></div><div class="owner-signout"><button id="admin-signout">Sign out</button></div></section></div>' + ownerSettingsNav(store.slug);
   const logoPicker=app.querySelector('.owner-brand input');
   const logoImage=app.querySelector('.owner-brand img');
   const logoStatus=app.querySelector('.owner-brand-status');
@@ -487,7 +487,7 @@ async function renderOwnerTab() {
     target.innerHTML='<nav class="owner-profile-tabs" aria-label="Profile sections">'
       +ownerProfileTabs.map(label=>'<button data-owner-tab="'+label+'" '+(tab===label?'aria-current="page"':'')+'>'+label+'</button>').join('')+'</nav>';
     if(tab==='Profile'){
-      target.insertAdjacentHTML('beforeend','<p>Manage your store identity, appearance, password and support.</p>');
+      target.insertAdjacentHTML('beforeend','<p class="owner-profile-help">Manage your store, appearance, password and support.</p>');
       return;
     }
     const settingsTarget=document.createElement('div');
