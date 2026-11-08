@@ -356,16 +356,18 @@ document.addEventListener('submit', async event => {
 });
 
 let ownerStore;
-let ownerTab = 'Overview';
+let ownerTab = 'My Store';
+const ownerProfileTabs = ['Business profile','Store settings','Account','Support'];
 let ownerPoll;
 let supportLoad = 0;
 const workspaceBrand = '<a class="workspace-brand" href="/"><img src="/enuxes-lockup.svg" alt="eNuxes"></a>';
 
 function ownerDashboard() {
   const store = ownerStore;
-  const tabs = ['Overview','Orders','Inventory','Notifications','Products','Business profile','Store builder','Store settings','Account','Support'];
+  const tabs = ['My Store','Orders','Inventory','Products','Store builder','Profile'];
+  const selected = ownerProfileTabs.includes(ownerTab) ? 'Profile' : ownerTab;
   app.innerHTML = '<div class="admin-layout"><aside class="panel admin-sidebar">' + workspaceBrand + '<small>STORE OWNER</small>'
-    + '<div class="admin-sections" aria-label="Store tools">' + tabs.map(tab => '<button data-owner-tab="' + tab + '" class="' + (tab===ownerTab?'active':'') + '">' + tab + '</button>').join('') + '</div></aside>'
+    + '<div class="admin-sections" aria-label="Store tools">' + tabs.map(tab => '<button data-owner-tab="' + tab + '" class="' + (tab===selected?'active':'') + '">' + tab + '</button>').join('') + '</div></aside>'
     + '<section class="stack"><header class="row workspace-top"><div><small>' + esc(store.name) + '</small><h2>' + ownerTab + '</h2></div><div class="toolbar"><button data-owner-tab="Notifications">Notifications <span id="owner-alert-count"></span></button><button id="admin-signout">Sign out</button></div></header><div id="owner-content" class="stack"></div></section></div>';
   revealWorkspaceTab();
   renderOwnerTab().catch(showOwnerError);
@@ -382,16 +384,26 @@ async function renderOwnerTab() {
   const target = document.getElementById('owner-content');
   const token = await getSessionToken();
   const byStore = '&business_id=eq.' + store.id;
-  if (['Account','Products','Business profile','Store builder'].includes(tab)) return ownerEditor(tab,target,token);
-  if (tab === 'Support') {
-    target.innerHTML = '<div class="panel"><h2>Support</h2><p>Chat with the eNuxes team about this store.</p><button data-support="' + store.id + '">Open conversation</button></div>';
+  if (tab==='My Store') return ownerStorePreview(target,token);
+  if (tab==='Profile') {
+    target.innerHTML='<section class="panel stack"><h2>Profile</h2><p>Manage your store identity, appearance, password and support.</p><div class="toolbar">'
+      +ownerProfileTabs.map(label=>'<button data-owner-tab="'+label+'">'+label+'</button>').join('')+'</div></section>';
     return;
   }
-  if (tab === 'Store settings') {
-    const [theme] = await request('/rest/v1/store_themes?select=accent' + byStore,{token});
-    target.innerHTML = '<div class="panel"><h2>Store appearance</h2><form id="owner-theme"><label>Store accent<input name="accent" type="color" value="' + esc(theme?.accent || '#166047') + '"></label><div><button class="primary">Save colour</button></div><p id="owner-theme-result" role="status"></p></form></div>';
+  if (ownerProfileTabs.includes(tab)) {
+    const settingsTarget=document.createElement('div');
+    target.innerHTML='<button class="owner-profile-back" data-owner-tab="Profile">← Profile</button>';
+    target.append(settingsTarget);
+    if (['Account','Business profile'].includes(tab)) return ownerEditor(tab,settingsTarget,token);
+    if (tab==='Support') {
+      settingsTarget.innerHTML='<div class="panel"><h2>Support</h2><p>Chat with the eNuxes team about this store.</p><button data-support="'+store.id+'">Open conversation</button></div>';
+      return;
+    }
+    const [theme]=await request('/rest/v1/store_themes?select=accent'+byStore,{token});
+    settingsTarget.innerHTML='<div class="panel"><h2>Store appearance</h2><form id="owner-theme"><label>Store accent<input name="accent" type="color" value="'+esc(theme?.accent||'#166047')+'"></label><div><button class="primary">Save colour</button></div><p role="status"></p></form></div>';
     return;
   }
+  if (['Products','Store builder'].includes(tab)) return ownerEditor(tab,target,token);
   const [orders,stock] = await Promise.all([
     request('/rest/v1/orders?select=id,status,payment_status,total_minor,created_at&order=created_at.desc&limit=30'+byStore,{token}),
     request('/rest/v1/products?select=name,stock&active=eq.true&stock=lte.5&order=stock.asc&limit=30'+byStore,{token})
