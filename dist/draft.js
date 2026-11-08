@@ -47,13 +47,18 @@ async function renderDraftChecklist(target,token){
 }
 function renderSharedOwnerPreview(target){
  const store=ownerStore;
- target.innerHTML='<div class="toolbar"><button data-owner-tab="Business profile">Edit profile</button><button data-owner-tab="Products">Add or edit products</button><button data-owner-tab="Store builder">Edit page layout</button>'
-  +(store.active?'<a class="button" href="/'+esc(store.slug)+'">View live store ↗</a>':store.owner_published_at?'':'<button class="primary" data-owner-tab="Ready to Publish">Ready to Publish</button>')+'</div>'
+ target.innerHTML='<div class="toolbar"><button data-owner-tab="Business profile">Edit profile</button><button data-owner-tab="Products">Add or edit products</button><button data-owner-tab="Home Layout">Layout and colours</button>'
+  +(store.active?'<a class="button" href="/'+esc(store.slug)+'">View live store ↗</a>':store.owner_published_at?'':'<button class="primary" data-owner-tab="Ready to Publish">Publish Store</button>')+'</div>'
   +'<iframe class="draft-store-preview" title="Storefront preview" src="/'+esc(store.slug)+'?owner-preview=1"></iframe>';
 }
 
+let ownerEditing=true;
 function canEditInlineStore(){
- return storefrontPreview&&Boolean(business?.demo_pack);
+ return storefrontPreview&&ownerEditing;
+}
+
+function ownerStoreToolbar(){
+ return storefrontPreview?'<div class="owner-store-toolbar"><button data-owner-mode="edit" aria-pressed="'+ownerEditing+'">Edit Store</button><button data-owner-mode="preview" aria-pressed="'+!ownerEditing+'">Preview</button><button data-owner-save disabled>Save Changes</button><small role="status">All changes saved</small></div>':'';
 }
 
 function inlineEditButton(kind,id,label){
@@ -63,30 +68,109 @@ function inlineEditButton(kind,id,label){
 async function reloadInlineStore(){
  const snapshot=await readStorefront(business.slug);
  if(!snapshot)throw new Error('Store access is unavailable.');
+ const top=window.scrollY;
  applyStorefront(snapshot);
  ownerStore=business;
  renderShop();
+ window.scrollTo(0,top);
  toast('Saved.');
 }
 
 app.addEventListener('click',event=>{
- const button=event.target.closest('[data-inline-edit],[data-inline-cancel]');
- if(!button||!canEditInlineStore())return;
- const open=app.querySelector('.inline-store-editor');
- if(button.hasAttribute('data-inline-cancel')){
-  if(!open.querySelector('form button:disabled,[data-save-layout]:disabled'))open.remove();
+ if(event.target.closest('[data-owner-save]')){modal.querySelector('.inline-store-editor form')?.requestSubmit();return;}
+ const mode=event.target.closest('[data-owner-mode]');
+ if(mode&&storefrontPreview){
+  ownerEditing=mode.dataset.ownerMode==='edit';
+  const top=window.scrollY;
+  renderShop();
+  window.scrollTo(0,top);
+  app.querySelector('[data-owner-mode="'+mode.dataset.ownerMode+'"]')?.focus({preventScroll:true});
   return;
  }
- if(open){open.scrollIntoView({block:'nearest'});return;}
- const editor=document.createElement('section');
- editor.className='inline-store-editor panel stack';
+ const button=event.target.closest('[data-inline-edit]');
+ if(!button||!canEditInlineStore())return;
  const {inlineEdit:kind,inlineId:id}=button.dataset;
- const anchor=button.closest('.shop-card,[data-home-section],.shop-heading');
- if(!anchor)return;
  ownerStore=business;
- anchor.after(editor);
- if(kind==='sections')layoutEditor(editor,publishedContent,reloadInlineStore);
- else editor.innerHTML=kind==='profile'?profileForm(business,publishedContent):productForm(id?getProduct(id):undefined,true);
- editor.insertAdjacentHTML('afterbegin','<div class="row"><strong>'+button.textContent+'</strong><button type="button" data-inline-cancel>Cancel</button></div>');
- editor.scrollIntoView({block:'nearest'});
+ if(id){detail(id);if(kind==='photo')modal.querySelector('.owner-photo-editor input')?.click();return;}
+ modal.className='owner-edit-sheet';
+ openDialog(button.textContent,'<div class="inline-store-editor"></div>');
+ const editor=modal.querySelector('.inline-store-editor');
+ if(kind==='sections')layoutEditor(editor,publishedContent,async()=>{await reloadInlineStore();modal.close();});
+ else{
+  editor.innerHTML=kind==='profile'?profileForm(business,publishedContent):productForm({},true);
+  initOwnerPhotos();
+ }
 });
+
+modal.addEventListener('click',event=>{
+ const button=event.target.closest('[data-inline-delete]');
+ if(!button||!canEditInlineStore())return;
+ openDialog('Delete item','<div class="inline-store-editor"><form id="owner-delete-product" data-id="'+esc(button.dataset.inlineDelete)+'"><p>Remove this item from your store?</p><button class="primary">Delete item</button><button type="button" data-action="close">Cancel</button><p role="status"></p></form></div>');
+});
+
+const photoDrafts=new WeakMap();
+function initOwnerPhotos(){
+ const editor=modal.querySelector('.owner-photo-editor');
+ if(!editor)return;
+ const state={urls:JSON.parse(editor.dataset.photos)};
+ photoDrafts.set(editor,state);
+ const save=editor.closest('form').querySelector('button.primary');
+ const picker=(label,index)=>'<label class="owner-photo-picker">'+label+'<input type="file" aria-label="'+label+'" accept="image/jpeg,image/png,image/webp,image/gif" data-photo-slot="'+index+'" '+(index<0?'multiple':'')+'></label>';
+ const render=()=>{
+  const [cover]=state.urls;
+  editor.innerHTML='<div class="owner-photo-cover">'+(cover?imageTag(cover,'Cover photo')+'<span>Cover</span>'+picker('Replace Cover',0):'<p>No photos yet</p>')+'</div>'
+   +'<small>'+state.urls.length+' / 10 photos</small><div class="owner-photo-grid">'+state.urls.map((url,i)=>'<div>'+imageTag(url,'Photo '+(i+1))+(i?'<button type="button" data-photo-cover="'+i+'">Set cover</button><button type="button" data-photo-left="'+i+'" aria-label="Move photo '+(i+1)+' earlier">←</button>':'<small>Cover</small>')+(i?picker('Replace',i):'')+'<button type="button" data-photo-remove="'+i+'">Remove</button></div>').join('')
+   +(state.urls.length<10?picker('+ Add Photos',-1):'')+'</div><p role="status"></p>';
+ };
+ const upload=async(files,index)=>{
+  const status=editor.querySelector('[role=status]');
+  if(index<0&&files.length+state.urls.length>10){status.textContent='Choose up to '+(10-state.urls.length)+' more photos.';return;}
+  const controls=[...editor.querySelectorAll('button,input'),save];
+  controls.forEach(control=>control.disabled=true);
+  status.textContent='Uploading '+files.length+' photo'+(files.length===1?'…':'s…');
+  try{
+   const urls=await uploadMedia(files);
+   if(index<0)state.urls.push(...urls);
+   else if(urls.length)state.urls[index]=urls[0];
+   render();
+   editor.querySelector('[role=status]').textContent='Photos ready. Save Changes to apply them.';
+   markOwnerEditor('Unsaved changes');
+  }catch(error){
+   status.textContent=error.message+' ';
+   const retry=document.createElement('button');
+   retry.type='button';retry.textContent='Retry upload';
+   retry.onclick=()=>upload(files,index);
+   status.append(retry);
+  }finally{controls.forEach(control=>control.disabled=false);}
+ };
+ editor.onchange=event=>{
+  const files=Array.from(event.target.files||[]);
+  if(files.length)upload(files,Number(event.target.dataset.photoSlot));
+ };
+ editor.onclick=event=>{
+  const button=event.target.closest('button');
+  if(!button)return;
+  const {photoCover,photoLeft,photoRemove}=button.dataset;
+  if(photoRemove!==undefined)state.urls.splice(Number(photoRemove),1);
+  else if(photoCover!==undefined)state.urls.unshift(...state.urls.splice(Number(photoCover),1));
+  else if(photoLeft!==undefined){const i=Number(photoLeft);[state.urls[i-1],state.urls[i]]=[state.urls[i],state.urls[i-1]];}
+  else return;
+  render();
+  markOwnerEditor('Unsaved changes');
+ };
+ render();
+}
+
+function markOwnerEditor(message){
+ const status=app.querySelector('.owner-store-toolbar [role=status]');
+ if(status)status.textContent=message;
+ const save=app.querySelector('[data-owner-save]');
+ if(save)save.disabled=message!=='Unsaved changes';
+}
+modal.addEventListener('input',event=>{
+ if(event.target.closest('.inline-store-editor'))markOwnerEditor('Unsaved changes');
+});
+modal.addEventListener('submit',event=>{
+ if(event.target.closest('.inline-store-editor'))markOwnerEditor('Saving…');
+});
+modal.addEventListener('close',()=>markOwnerEditor('All changes saved'));
