@@ -180,3 +180,11 @@ body:has(.shop-frame>.shop-tabs-owner) footer{margin-bottom:calc(112px + env(saf
  .shop-filters label{grid-column:1/-1;min-width:0}
  .shop-filters button{white-space:normal;justify-content:center}
 }
+
+.shop-profile-banner{position:relative;isolation:isolate;overflow:hidden;border-radius:1rem;padding:clamp(1.25rem,4vw,2.5rem) .85rem;color:#fff;background:#172441;overflow-wrap:anywhere}
+.shop-profile-background,.shop-profile-background::after{position:absolute;inset:0;z-index:-1}
+.shop-profile-background img{display:block;width:100%;height:100%;object-fit:cover}
+.shop-profile-background::after{content:"";background:rgb(0 0 0 / 66%);z-index:0}
+.shop-profile-banner :is(h1,small,.muted){color:#fff}
+.shop-profile-banner button{color:#172441}
+#owner-profile fieldset img{display:block;width:100%;max-height:160px;object-fit:contain}
