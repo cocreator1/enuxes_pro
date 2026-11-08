@@ -20,6 +20,31 @@ Deno.serve(async request => {
     if (!access.ok || !(await access.json()).length) return reply(403,{message:'Main Admin access required.'});
     const input=await request.json();
     if (!input || typeof input!=='object') return reply(400,{message:'Invalid store details.'});
+    if (input.action==='update-owner-password') {
+      const {storeId,password}=input;
+      if (typeof storeId!=='string'||!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(storeId)
+        ||typeof password!=='string'||password.length<14||new TextEncoder().encode(password).length>72)
+        return reply(400,{message:'Enter a password with at least 14 characters and at most 72 UTF-8 bytes.'});
+      const rows=async (path: string)=>{
+        const response=await fetch(base+'/rest/v1/'+path,{headers:elevated});
+        if(!response.ok)throw new Error('Account lookup failed.');
+        return response.json();
+      };
+      const members=await rows('business_members?select=user_id&business_id=eq.'+storeId);
+      const owners=[];
+      for(const {user_id:id} of members){
+        if(!(await rows('platform_admins?select=user_id&user_id=eq.'+id)).length)owners.push(id);
+      }
+      if(owners.length!==1)return reply(409,{message:'This store needs exactly one assigned owner account separate from Main Admin.'});
+      const [id]=owners;
+      if((await rows('business_members?select=business_id&user_id=eq.'+id+'&limit=2')).length!==1)
+        return reply(409,{message:'This owner account is shared by multiple stores.'});
+      const updated=await fetch(base+'/auth/v1/admin/users/'+id,{
+        method:'PUT',headers:elevated,body:JSON.stringify({password})
+      });
+      if(!updated.ok)return reply(400,{message:'The password could not be updated. Check the password and try again.'});
+      return reply(200,{updated:true});
+    }
     const {username,password,ownerName,slug,type,plan,pack}=input;
     if (typeof username!=='string'||!/^[a-z0-9][a-z0-9_-]{2,31}$/.test(username)
       ||typeof password!=='string'||password.length<14||new TextEncoder().encode(password).length>72
