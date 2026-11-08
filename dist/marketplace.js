@@ -3,19 +3,20 @@ const marketRank=(rows,id)=>rows.get(id)??Infinity;
 const sortMarket=(stores,rows)=>stores.slice().sort((a,b)=>marketRank(rows,a.id)-marketRank(rows,b.id)||a.name.localeCompare(b.name)||a.slug.localeCompare(b.slug));
 
 async function marketplace(){
-  const [stores,order,banners]=await Promise.all([
+  const [stores,order,banners,landing]=await Promise.all([
     request('/rest/v1/businesses?select='+businessColumns+'&active=eq.true&marketplace_listed=eq.true'),
     request(marketPath+'store_order?select=business_id,position'),
-    request(marketPath+'banners?select=id,title,image_url,link_url&enabled=eq.true&order=position,id')
+    request(marketPath+'banners?select=id,title,image_url,link_url&enabled=eq.true&order=position,id'),
+    readLanding().catch(()=>({}))
   ]);
   const sorted=sortMarket(stores,new Map(order.map(row=>[row.business_id,row.position])));
   const cards=sorted.map(store=>'<article class="panel stack"><small>'+esc(store.type.replaceAll('_',' '))+'</small><h3>'+esc(store.name)+'</h3><p>'+esc(store.description)+'</p><a class="button" href="/'+esc(store.slug)+'">Visit store ↗</a></article>').join('');
   const home='<div class="market-banners">'+banners.map(banner=>{
     const img=imageTag(banner.image_url,banner.title);
     return banner.link_url?'<a href="'+esc(banner.link_url)+'" rel="noopener">'+img+'</a>':img;
-  }).join('')+'</div><h2>Explore businesses</h2><div class="grid">'+(cards||'<p>No stores are open yet.</p>')+'</div>';
-  app.innerHTML='<div class="hero"><section><span class="badge">ENUXES MARKETPLACE</span><h1>Find it local.</h1><p>Discover stores, products and services on eNuxes.</p></section><div class="hero-art">'+icon('bag','#bdd0ff')+'</div></div>'
-    +'<form id="market-search" class="panel market-search"><label>Search the marketplace<input name="query" type="search" maxlength="100" placeholder="Try hoodies, a store name or a service"></label><button class="primary">Search</button><button type="reset">Clear</button></form><div id="market-results" aria-live="polite">'+home+'</div>';
+  }).join('')+'</div><h2 id="market-businesses">'+esc(landingText(landing,'businesses'))+'</h2><div class="grid">'+(cards||'<p>No stores are open yet.</p>')+'</div>';
+  app.innerHTML=landingHero(landing)+landingBlocks(landing)+landingSearch(landing)
+    +'<div id="market-results" aria-live="polite">'+home+'</div>';
   const form=app.querySelector('#market-search'),results=app.querySelector('#market-results');
   let sequence=0;
   form.addEventListener('reset',()=>{sequence++;results.innerHTML=home;});
@@ -35,14 +36,16 @@ async function marketplace(){
 
 async function marketplaceAdmin(target){
   const token=await getSessionToken();
-  const [ranks,initialBanners]=await Promise.all([
+  const [ranks,initialBanners,landing]=await Promise.all([
     request(marketPath+'store_order?select=*',{token}),
-    request(marketPath+'banners?select=*&order=position,id',{token})
+    request(marketPath+'banners?select=*&order=position,id',{token}),
+    readLanding(token)
   ]);
   if(!target.isConnected)return;
   const stores=sortMarket(adminStores.filter(store=>store.lifecycle==='active'&&store.id!=='a0100000-0000-4000-8000-000000000001'),new Map(ranks.map(row=>[row.business_id,row.position])));
-  target.innerHTML='<section class="panel stack"><div class="row"><h2>Marketplace banners</h2><button data-market-banner="new">Add banner</button></div><div id="market-banner-list"></div></section>'
+  target.innerHTML='<section id="market-landing-editor" class="panel stack"></section><section class="panel stack"><div class="row"><h2>Marketplace banners</h2><button data-market-banner="new">Add banner</button></div><div id="market-banner-list"></div></section>'
     +'<section class="panel stack"><h2>Homepage store order</h2><p>Move stores up or down. Newly activated stores appear after your ordered list.</p><div id="market-order"></div><div><button class="primary" id="market-save-order">Save store order</button></div><p role="status" id="market-order-status"></p></section>';
+  landingEditor(target.querySelector('#market-landing-editor'),landing);
   let banners=initialBanners;
   const order=target.querySelector('#market-order'),bannerList=target.querySelector('#market-banner-list');
   function render(){
@@ -106,4 +109,132 @@ function editMarketBanner(banner={},refresh){
       await refresh();
     }catch(error){if(form.isConnected)status.textContent=error.message;else toast('Saved. Reopen Marketplace to refresh the list.');}finally{button.disabled=false;}
   };
+}
+
+const landingEndpoint=marketPath+'landing?id=eq.1';
+const landingFields={
+ badge:['Marketplace label','ENUXES MARKETPLACE'],
+ title:['Headline','Find it local.'],
+ intro:['Introduction','Discover stores, products and services on eNuxes.'],
+ search:['Search label','Search the marketplace'],
+ placeholder:['Search placeholder','Try hoodies, a store name or a service'],
+ searchButton:['Search button','Search'],
+ clearButton:['Clear button','Clear'],
+ businesses:['Businesses heading','Explore businesses']
+};
+const landingKinds={button:'Button',tab:'Tab',text:'Text',image:'Image'};
+const landingText=(content,key)=>content[key]??landingFields[key][1];
+const landingLink=url=>typeof url==='string'&&(/^(?:https:\/\/[^\s]+|\/(?![\/\\])[^\s\\]*|#[a-z][a-z0-9-]*)$/i.test(url))?url:'';
+async function readLanding(token){
+ const [row]=await request(landingEndpoint+'&select=content',{token});
+ return row?.content||{};
+}
+function landingDots(key,label,editing){
+ return editing?'<button type="button" class="visual-dots" data-landing-edit="'+esc(key)+'" aria-label="Edit '+esc(label)+'">⋯</button>':'';
+}
+function landingHero(content,editing=false){
+ const dots=key=>landingDots(key,landingFields[key][0],editing);
+ return '<div class="hero"><section><span class="badge">'+esc(landingText(content,'badge'))+'</span>'+dots('badge')
+  +'<h1>'+esc(landingText(content,'title'))+'</h1>'+dots('title')+'<p>'+esc(landingText(content,'intro'))+'</p>'+dots('intro')
+  +'</section><div class="hero-art">'+(imageTag(content.heroImage,'Marketplace hero')||icon('bag','#bdd0ff'))+landingDots('heroImage','hero image',editing)+'</div></div>';
+}
+function landingBlocks(content,editing=false){
+ const blocks=Array.isArray(content.blocks)?content.blocks:[];
+ return ['tab','button','text','image'].map(kind=>{
+  const entries=blocks.map((block,index)=>{
+   if(block.kind!==kind)return '';
+   const link=landingLink(block.url);
+   const body=kind==='image'?imageTag(block.image,block.label):kind==='text'?'<p>'+esc(block.label)+'</p>':esc(block.label);
+   const node=link&&!editing?'<a class="button" href="'+esc(link)+'">'+body+'</a>':kind==='button'||kind==='tab'?'<span class="button">'+body+'</span>':body;
+   return '<div class="landing-item">'+node+landingDots('block:'+index,block.label||kind,editing)+'</div>';
+  }).join('');
+  return entries?'<div class="landing-'+kind+'">'+entries+'</div>':'';
+ }).join('');
+}
+function landingSearch(content,editing=false){
+ const dots=key=>landingDots(key,landingFields[key][0],editing);
+ return '<form id="market-search" class="panel market-search"><label>'+esc(landingText(content,'search'))
+  +'<input name="query" type="search" maxlength="100" placeholder="'+esc(landingText(content,'placeholder'))+'" '+(editing?'disabled':'')+'></label>'
+  +dots('search')+dots('placeholder')+'<button class="primary" type="'+(editing?'button':'submit')+'">'+esc(landingText(content,'searchButton'))+'</button>'
+  +dots('searchButton')+'<button type="'+(editing?'button':'reset')+'">'+esc(landingText(content,'clearButton'))+'</button>'+dots('clearButton')+'</form>';
+}
+function landingEditor(target,initial){
+ let content=initial;
+ const render=()=>{
+  target.innerHTML='<h2>Panel 0 landing page</h2><p>Tap ⋯ to edit. Saved changes appear on the public homepage.</p>'
+   +'<div class="toolbar">'+Object.entries(landingKinds).map(([kind,label])=>'<button type="button" data-landing-edit="new:'+kind+'">Add '+label.toLowerCase()+'</button>').join('')+'</div>'
+   +landingHero(content,true)+landingBlocks(content,true)+landingSearch(content,true)
+   +'<div class="row"><h2>'+esc(landingText(content,'businesses'))+'</h2>'+landingDots('businesses','businesses heading',true)+'</div>';
+ };
+ render();
+ target.addEventListener('click',event=>{
+  const key=event.target.closest('[data-landing-edit]')?.dataset.landingEdit;
+  if(!key)return;
+  const index=key.startsWith('block:')?Number(key.slice(6)):-1;
+  const existing=content.blocks?.[index];
+  const kind=existing?.kind||(key.startsWith('new:')?key.slice(4):'');
+  const image=key==='heroImage'||kind==='image';
+  const link=kind==='button'||kind==='tab'||kind==='image';
+  const title=landingFields[key]?.[0]||(key==='heroImage'?'Hero image':landingKinds[kind]);
+  openDialog(title,'<form id="landing-editor-form">'
+   +(kind==='text'?'<label>Text<textarea name="label" maxlength="1000" required>'+esc(existing?.label)+'</textarea></label>':key==='heroImage'?'':field(title,'label',existing?.label??(kind?'':landingText(content,key)),kind==='image'?120:240,'text',kind!=='image'))
+   +(link?field('Destination','url',existing?.url,500,'text',kind!=='image'):'')
+   +(image?field('Image URL','imageUrl',existing?.image??content.heroImage,2048,'url')+'<label>Upload image<input name="image" type="file" accept="image/jpeg,image/png,image/webp,image/gif"></label>':'')
+   +'<p role="status"></p><div class="toolbar"><button type="submit" class="primary">Save Changes</button>'
+   +(existing?'<button type="button" data-remove-landing>Remove</button>':'')+'</div></form>');
+  const form=modal.querySelector('#landing-editor-form');
+  const save=async remove=>{
+   const status=form.querySelector('[role=status]');
+   const data=new FormData(form),get=name=>String(data.get(name)||'').trim();
+   const buttons=[...form.querySelectorAll('button')];
+   buttons.forEach(button=>button.disabled=true);
+   status.textContent='Saving…';
+   try{
+    const token=await getSessionToken();
+    const next={...content};
+    if(kind){
+     const blocks=[...(content.blocks||[])];
+     if(remove)blocks.splice(index,1);
+     else{
+      if(index<0&&blocks.length>=30)throw new Error('You can add up to 30 sections and links.');
+      const url=get('url'),label=get('label');
+      if(kind!=='image'&&!label)throw new Error('Enter a name or text.');
+      if((url||kind==='tab'||kind==='button')&&!landingLink(url))throw new Error('Use an HTTPS link, a site path, or #market-businesses.');
+      const entry={kind,label,url};
+      if(image)entry.image=await landingImage(form,token,true);
+      if(index<0)blocks.push(entry);else blocks[index]=entry;
+     }
+     next.blocks=blocks;
+    }else if(image)next.heroImage=await landingImage(form,token,false);
+    else{
+     if(!get('label'))throw new Error('Enter text before saving.');
+     next[key]=get('label');
+    }
+    const [saved]=await request(landingEndpoint,{method:'PATCH',token,prefer:'return=representation',data:{content:next}});
+    if(!saved)throw new Error('Changes were not saved. Check Main Admin access.');
+    content=saved.content;
+    render();
+    if(form.isConnected)modal.close();
+    toast('Landing page saved.');
+   }catch(error){status.textContent=error.message;}finally{buttons.forEach(button=>button.disabled=false);}
+  };
+  form.onsubmit=event=>{event.preventDefault();save(false);};
+  form.querySelector('[data-remove-landing]')?.addEventListener('click',()=>save(true));
+ });
+}
+
+async function landingImage(form,token,required){
+ const file=form.elements.image.files[0];
+ let url=form.elements.imageUrl.value.trim();
+ if(file){
+  if(!file.size||file.size>5242880||!allowedImages.includes(file.type))throw new Error('Choose a JPG, PNG, WebP or GIF under 5 MB.');
+  const path=crypto.randomUUID();
+  const response=await fetch(apiRoot+'/storage/v1/object/marketplace-media/'+path,{method:'POST',headers:{apikey:publicKey,Authorization:'Bearer '+token,'Content-Type':file.type},body:file});
+  if(!response.ok)throw new Error('Image upload failed.');
+  url=apiRoot+'/storage/v1/object/public/marketplace-media/'+path;
+  form.elements.imageUrl.value=url;
+  form.elements.image.value='';
+ }
+ if((url||required)&&!safeImage(url))throw new Error('Upload an image or enter an HTTPS image URL.');
+ return url;
 }
