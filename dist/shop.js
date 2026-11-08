@@ -69,7 +69,8 @@ function renderShop(){
   const saleBanner=merch.bannerEnabled===false?'':items.some(p=>p.sale)?'<div class="shop-sale-wrap">'+(safeImage(merch.bannerImage)?imageTag(merch.bannerImage,''):'')
    +(safeImage(merch.bannerLink)?'<a class="shop-sale" href="'+esc(merch.bannerLink)+'">':'<button class="shop-sale" data-shop-sale>')
    +'<strong>'+esc(merch.bannerTitle||(isTrendora()?'Mid-season sale':'Store sale'))+'</strong><span>Browse discounted products →</span>'+(safeImage(merch.bannerLink)?'</a>':'</button>')+'</div>':'';
-  body='<section data-home-section="profile" class="shop-profile">'+(imageTag(profile.logo,business.name)||'<div class="shop-avatar">'+esc(business.name.slice(0,1).toUpperCase())+'</div>')
+  const profileBanner=safeImage(profile.merchandising?.profileBanner);
+  body='<section data-home-section="profile" class="shop-profile'+(profileBanner?' shop-profile-banner':'')+'">'+(profileBanner?'<div class="shop-profile-background" aria-hidden="true">'+imageTag(profileBanner)+'</div>':'')+(imageTag(profile.logo,business.name)||'<div class="shop-avatar">'+esc(business.name.slice(0,1).toUpperCase())+'</div>')
    +'<h1>'+esc(business.name)+'</h1><small>on eNuxes</small><p>'+esc(business.description)+'</p>'
    +'<button id="shop-follow" aria-pressed="'+Boolean(shopInfo.following)+'">'+shopIcon('people')+' '+(shopInfo.following?'Following':'Follow')+(Number.isFinite(Number(shopInfo.followers))?' · '+Number(shopInfo.followers).toLocaleString()+' followers':'')+'</button>'
    +([profile.category,profile.email,profile.phone].some(Boolean)?'<p class="muted">'+[profile.category,profile.email,profile.phone].filter(Boolean).map(esc).join(' · ')+'</p>':'')+inlineEditButton('profile','','Edit profile')+'</section>'
