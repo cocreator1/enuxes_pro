@@ -390,6 +390,9 @@ document.addEventListener('submit', async event => {
       modal.close();
     }
     await refreshDashboard();
+    if(form.id==='main-admin-login' && ownerSlug){
+      location.replace('/'+encodeURIComponent(ownerSlug)+'?owner-preview=1');
+    }
   } catch (error) {
     if (form.id === 'main-admin-login' || error.status === 401 || error.status === 403) {
       session(null);
