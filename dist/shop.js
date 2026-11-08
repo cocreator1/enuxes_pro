@@ -77,7 +77,7 @@ function renderShop(){
   body='<div class="shop-heading"><h2>Catalogue</h2><p class="muted">Browse our collections</p></div><div class="shop-collections">'
    +(groups.map(([name,cover])=>'<button class="shop-collection" '+(name==='Sale'?'data-shop-sale':'data-collection="'+esc(name)+'"')+'>'+(cover?imageTag(cover):'')+'<strong>'+esc(name)+'</strong><span aria-hidden="true">›</span></button>').join('')||'<p>No collections yet.</p>')+'</div>';
  }
- app.innerHTML='<div class="shop-frame">'+(storefrontPreview?'<p class="store-preview-notice">Private owner preview · Ordering is disabled.</p>':'')+ownerStoreToolbar()+'<div class="shop-content">'+body+'</div>'+shopNav()+'</div>';
+ app.innerHTML='<div class="shop-frame">'+ownerStoreToolbar()+'<div class="shop-content">'+body+'</div>'+shopNav()+'</div>';
  if(shopPage==='shop')updateShopGrid();
  if(canEditInlineStore()&&shopPage==='shop')app.querySelector('.shop-heading').insertAdjacentHTML('beforeend',inlineEditButton('product','','Add product'));
  if(shopPage==='home')renderPublishedLayout(homeConfig);
