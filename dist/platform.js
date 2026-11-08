@@ -6,6 +6,7 @@ const adminEmail = 'enuxespro@enuxes.com';
 const storefrontRoot = 'https://www.enuxes.com';
 const ownerSlug = location.pathname.match(/^\/([a-z0-9]+(?:-[a-z0-9]+)*)\/owner\/?$/)?.[1];
 const storefrontPreview=new URLSearchParams(location.search).get('owner-preview')==='1';
+const savedStorePreview=storefrontPreview&&new URLSearchParams(location.search).get('mode')==='preview';
 const sessionKey = ownerSlug || storefrontPreview ? 'enuxes-owner-session' : 'enuxes-mainadmin-session';
 let adminSession;
 let adminStores = [];
@@ -240,7 +241,7 @@ document.addEventListener('click', async event => {
   if (!target) return;
   if (target.dataset.action==='close') supportLoad++;
   if (target.hasAttribute('data-owner-storefront') && ownerStore) {
-    location.assign('/'+encodeURIComponent(ownerStore.slug)+'?owner-preview=1');
+    location.assign('/'+encodeURIComponent(ownerStore.slug)+'?owner-preview=1&mode=preview&return='+encodeURIComponent(ownerTab));
     return;
   }
   if (target.dataset.ownerTab && ownerStore) { ownerTab=target.dataset.ownerTab; return ownerDashboard(); }
@@ -427,11 +428,12 @@ function ownerSettingsNav(slug){
 
 function ownerDashboard() {
   const store = ownerStore;
-  const tabs = ['My Store','Orders','Inventory','Products','Store builder','Home Layout',...(store.slug==='trendora'?['Merchandising','Delivery']:[]),'Profile',...(!store.active&&!store.owner_published_at?['Ready to Publish']:[])];
+  const tabs = ['Preview','Orders','Inventory','Products','Store builder','Home Layout',...(store.slug==='trendora'?['Merchandising','Delivery']:[]),'Profile',...(!store.active&&!store.owner_published_at?['Ready to Publish']:[])];
   const selected = ownerProfileTabs.includes(ownerTab) ? 'Profile' : ownerTab;
+  const signOutInProfile=selected==='Profile';
   app.innerHTML = '<div class="admin-layout owner-dashboard"><aside class="panel admin-sidebar">' + '<label class="workspace-brand owner-brand"><img src="/enuxes-lockup.svg" alt=""><span>Upload logo</span><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" aria-label="Upload store logo"></label><small class="owner-brand-status" role="status"></small><small>STORE OWNER</small>'
-    + '<nav class="admin-sections" aria-label="Store tools">' + tabs.map(tab => '<button ' + (tab==='My Store'?'data-owner-storefront':'data-owner-tab="'+tab+'"') + (tab===selected?' class="active" aria-current="page"':'') + '>' + tab + '</button>').join('') + '</nav></aside>'
-    + '<section class="stack"><header class="row workspace-top"><div><small>' + esc(store.name) + '</small><h2>' + ownerTab + '</h2></div><div class="toolbar"><button data-owner-tab="Notifications">Notifications <span id="owner-alert-count"></span></button></div></header><div id="owner-content" class="stack"></div><div class="owner-signout"><button id="admin-signout">Sign out</button></div></section></div>' + ownerSettingsNav(store.slug);
+    + '<nav class="admin-sections" aria-label="Store tools">' + tabs.map(tab => '<button ' + (tab==='Preview'?'data-owner-storefront':'data-owner-tab="'+tab+'"') + (tab===selected?' class="active" aria-current="page"':'') + '>' + tab + '</button>').join('') + '</nav></aside>'
+    + '<section class="stack"><header class="row workspace-top"><div><small>' + esc(store.name) + '</small><h2>' + ownerTab + '</h2></div><div class="toolbar"><button data-owner-tab="Notifications">Notifications <span id="owner-alert-count"></span></button></div></header><div id="owner-content" class="stack"></div>' + (signOutInProfile?'':'<div class="owner-signout"><button id="admin-signout">Sign out</button></div>') + '</section></div>' + ownerSettingsNav(store.slug);
   const logoPicker=app.querySelector('.owner-brand input');
   const logoImage=app.querySelector('.owner-brand img');
   const logoStatus=app.querySelector('.owner-brand-status');
@@ -485,7 +487,7 @@ async function renderOwnerTab() {
   if(tab==='Ready to Publish')return renderDraftChecklist(target,token);
   if (tab==='Profile'||ownerProfileTabs.includes(tab)) {
     target.innerHTML='<nav class="owner-profile-tabs" aria-label="Profile sections">'
-      +ownerProfileTabs.map(label=>'<button data-owner-tab="'+label+'" '+(tab===label?'aria-current="page"':'')+'>'+label+'</button>').join('')+'</nav>';
+      +ownerProfileTabs.map(label=>'<button data-owner-tab="'+label+'" '+(tab===label?'aria-current="page"':'')+'>'+label+'</button>').join('')+'<button id="admin-signout" class="owner-profile-signout">Sign Out</button></nav>';
     if(tab==='Profile'){
       target.insertAdjacentHTML('beforeend','<p class="owner-profile-help">Manage your store, appearance, password and support.</p>');
       return;
@@ -609,6 +611,11 @@ function applyStorefront(snapshot){
 async function boot() {
   nav.innerHTML = '<a class="brand" href="/"><img src="/enuxes-logo.svg" width="34" height="34" alt="">eNuxes</a><a href="/">Businesses</a>';
   document.querySelector('footer').textContent = 'Powered by eNuxes - 2026';
+  if(ownerSlug){
+    const section=new URLSearchParams(location.search).get('section');
+    if(['Profile','Orders','Inventory','Products','Store builder','Home Layout','Ready to Publish','Notifications',...ownerProfileTabs].includes(section)
+       ||(ownerSlug==='trendora'&&['Merchandising','Delivery'].includes(section)))ownerTab=section;
+  }
   if (ownerSlug || location.pathname.replace(/\/$/,'') === adminPath) {
     document.body.classList.add('workspace');
     app.innerHTML = '<p>Loading sign-in…</p>';
