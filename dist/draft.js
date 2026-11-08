@@ -196,7 +196,7 @@ app.addEventListener('click',event=>{
   +(!badge?'<label>'+ (heading?'Heading':'Button name')+'<input name="label" maxlength="80" value="'+esc(config.label||label)+'" required></label>':'')
   +(heading?'':'<label>Colour picker<input name="picker" type="color" value="'+colour+'"></label><label>Hex colour<input name="colour" pattern="#[0-9a-fA-F]{6}" value="'+colour+'" required></label><label>Opacity <output>'+esc(config.opacity??defaults.opacity??100)+'%</output><input name="opacity" type="range" min="0" max="100" value="'+esc(config.opacity??defaults.opacity??100)+'"></label>')
   +(!badge&&!heading?'<label>Navigate to<select name="destination">'+Object.entries(visualDestinations).map(([value,name])=>'<option value="'+value+'" '+(value===destination?'selected':'')+'>'+name+'</option>').join('')+'</select></label><label>External link<input name="url" type="url" maxlength="500" placeholder="https://" value="'+esc(config.url||'')+'"></label>':'')
-  +'<div class="owner-editor-actions"><button class="primary">Save Changes</button>'+(badge?'<button type="button" data-visual-reset>'+(product?'Reset to Store Default':'Reset Colour')+'</button>':'')+'</div><p role="status"></p></form>');
+  +'<div class="owner-editor-actions"><p class="visual-save-status" role="status" aria-live="polite"></p><button type="submit" class="primary">Save Changes</button>'+(badge?'<button type="button" data-visual-reset>'+(product?'Reset to Store Default':'Reset Colour')+'</button>':'')+'</div></form>');
  const form=modal.querySelector('#visual-settings');
  const fields=form.elements;
  if(fields.picker){
@@ -204,11 +204,25 @@ app.addEventListener('click',event=>{
   fields.colour.oninput=()=>{if(/^#[0-9a-f]{6}$/i.test(fields.colour.value))fields.picker.value=fields.colour.value;};
   fields.opacity.oninput=()=>{form.querySelector('output').value=fields.opacity.value+'%';};
  }
+ let saving=false;
  const save=async reset=>{
+  if(saving)return;
   const status=form.querySelector('[role=status]');
-  if(!reset&&fields.destination?.value==='link'&&!safeImage(fields.url.value))return void(status.textContent='Enter an HTTPS link.');
-  const value=heading?{label:fields.label.value.trim()}:{colour:fields.colour.value,opacity:Number(fields.opacity.value)};
-  if(!badge&&!heading)Object.assign(value,{label:fields.label.value.trim(),destination:fields.destination.value,url:fields.url.value.trim()});
+  const data=new FormData(form);
+  const read=name=>String(data.get(name)??'').trim();
+  const label=read('label');
+  const colour=read('colour');
+  const destination=read('destination');
+  const url=read('url');
+  if(!reset){
+   if(!badge&&!label){status.textContent='Enter a name before saving.';return;}
+   if(!heading&&!/^#[0-9a-f]{6}$/i.test(colour)){status.textContent='Enter a six-digit hex colour, such as #ffffff.';return;}
+   if(destination==='link'&&!safeImage(url)){status.textContent='Enter an HTTPS link.';return;}
+  }
+  const value=heading?{label}:{colour,opacity:Number(read('opacity'))};
+  if(!badge&&!heading)Object.assign(value,{label,destination,url:destination==='link'?url:''});
+  saving=true;
+  status.textContent='Saving…';
   const controls=[...form.querySelectorAll('button')];
   controls.forEach(control=>control.disabled=true);
   try{
@@ -216,13 +230,22 @@ app.addEventListener('click',event=>{
    const {merchandising={}}=await contentFor(business.id,token);
    const visual={...merchandising.visual};
    if(reset)delete visual[key];else visual[key]=value;
-   await updateContent(business.id,{merchandising:{...merchandising,visual}},token);
-   await reloadInlineStore();
-   modal.close();
-  }catch(error){status.textContent=error.message;}
-  finally{controls.forEach(control=>control.disabled=false);}
+   const saved=await updateContent(business.id,{merchandising:{...merchandising,visual}},token);
+   publishedContent=saved;
+   signalStorefrontSave(business.slug);
+   const top=window.scrollY;
+   renderShop();
+   window.scrollTo(0,top);
+   if(form.isConnected)modal.close();
+   toast('Changes saved.');
+  }catch(error){status.textContent=error.message||'Could not save. Try again.';}
+  finally{
+   saving=false;
+   controls.forEach(control=>control.disabled=false);
+  }
  };
- form.onsubmit=event=>{event.preventDefault();save(false);};
+ form.noValidate=true;
+ form.addEventListener('submit',event=>{event.preventDefault();save(false);});
  form.querySelector('[data-visual-reset]')?.addEventListener('click',()=>save(true));
  form.querySelector('[data-visual-price]')?.addEventListener('click',()=>{
   detail(product.id);
