@@ -467,7 +467,9 @@ async function trendoraMerchEditor(target,token){
     const [upload]=await uploadMedia(data.getAll('cover-upload-'+i));
     return {name:c.name,enabled:data.has('visible-'+i),cover:upload||validUrl(val('cover-'+i)),position:Number(val('order-'+i))};
    }));
+   const latest=await contentFor(ownerStore.id,await getSessionToken());
    await updateContent(ownerStore.id,{merchandising:{
+    ...latest.merchandising,
     bannerTitle:val('bannerTitle'),bannerImage:banner||validUrl(val('bannerImage')),bannerLink:validUrl(val('bannerLink')),bannerEnabled:data.has('bannerEnabled'),
     featured:data.getAll('featured'),palette:Object.fromEntries(Object.keys(trendoraColours).map(k=>[k,val('theme-'+k)])),
     collections:configured.sort((a,b)=>a.position-b.position)
