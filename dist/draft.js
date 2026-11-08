@@ -57,7 +57,7 @@ function ownerStoreToolbar(){
 }
 
 function inlineEditButton(kind,id,label){
- return canEditInlineStore()?'<button type="button" data-inline-edit="'+kind+'" data-inline-id="'+esc(id)+'">'+label+'</button>':'';
+ return canEditInlineStore()?'<button type="button" data-inline-edit="'+kind+'" data-inline-id="'+esc(id)+'" aria-label="'+esc(label)+'">'+(['profile','sections','product'].includes(kind)&&!label.startsWith('Add ')?'⋯':label)+'</button>':'';
 }
 
 function signalStorefrontSave(slug){
@@ -83,7 +83,7 @@ app.addEventListener('click',event=>{
  ownerStore=business;
  if(id){detail(id);if(kind==='photo')modal.querySelector('.owner-photo-editor input')?.click();return;}
  modal.className='owner-edit-sheet';
- openDialog(button.textContent,'<div class="inline-store-editor"></div>');
+ openDialog(button.getAttribute('aria-label')||button.textContent,'<div class="inline-store-editor"></div>');
  const editor=modal.querySelector('.inline-store-editor');
  if(kind==='sections')layoutEditor(editor,publishedContent,async()=>{await reloadInlineStore();modal.close();});
  else{
@@ -148,3 +148,85 @@ function initOwnerPhotos(){
  };
  render();
 }
+
+const visualDestinations={home:'Home',shop:'Shop',catalogue:'Catalogue',cart:'Cart',link:'External HTTPS link'};
+function visualSetting(key){
+ return publishedContent?.merchandising?.visual?.[key]||{};
+}
+function visualDots(key,label){
+ return canEditInlineStore()?'<button class="visual-dots" type="button" data-visual-key="'+esc(key)+'" aria-label="Edit '+esc(label)+'">⋯</button>':'';
+}
+function visualPaint(setting){
+ if(!/^#[0-9a-f]{6}$/i.test(setting.colour||''))return '';
+ const alpha=Math.min(1,Math.max(0,Number(setting.opacity??100)/100))||0;
+ const rgb=setting.colour.slice(1).match(/../g).map(v=>Math.round(parseInt(v,16)*alpha+255*(1-alpha)));
+ const luminance=rgb.map(v=>v/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4)
+  .reduce((sum,v,i)=>sum+v*[.2126,.7152,.0722][i],0);
+ return 'background:rgb('+rgb.join(',')+');color:'+(luminance>.179?'#000':'#fff');
+}
+function visualButton(key,label,destination,icon=''){
+ const setting=visualSetting(key);
+ const target=Object.hasOwn(visualDestinations,setting.destination)?setting.destination:destination;
+ const title=setting.label||label;
+ const style=' style="'+visualPaint(setting)+'"';
+ const control=target==='link'&&safeImage(setting.url)
+  ?'<a class="visual-action" href="'+esc(setting.url)+'"'+style+'>'+icon+'<span>'+esc(title)+'</span></a>'
+  :'<button data-shop-page="'+(target==='link'?destination:target)+'" '+(shopPage===target?'aria-current="page"':'')+style+'>'+icon+'<span>'+esc(title)+'</span></button>';
+ return '<span class="visual-slot">'+control+visualDots(key,label)+'</span>';
+}
+function visualHeading(key,label){
+ return '<span class="visual-slot"><h2>'+esc(visualSetting(key).label||label)+'</h2>'+visualDots(key,label)+'</span>';
+}
+
+app.addEventListener('click',event=>{
+ const button=event.target.closest('[data-visual-key]');
+ if(!button||!canEditInlineStore())return;
+ const key=button.dataset.visualKey;
+ const badge=key==='price-default'||key.startsWith('price:');
+ const product=key.startsWith('price:')?getProduct(key.slice(6)):null;
+ const heading=key.startsWith('heading:');
+ const config=visualSetting(key);
+ const defaults=badge?visualSetting('price-default'):{};
+ const colour=[config.colour,defaults.colour].find(v=>/^#[0-9a-f]{6}$/i.test(v||''))||'#ffffff';
+ const label=button.getAttribute('aria-label').slice(5);
+ const destination=config.destination||key.split(':')[1];
+ modal.className='owner-edit-sheet';
+ openDialog(badge?'Price Badge Colour':label,'<form id="visual-settings">'
+  +(product?'<div class="toolbar"><button type="button" data-visual-price>Edit Price</button><button type="button" data-visual-default>Store-wide colour</button></div>':'')
+  +(!badge?'<label>'+ (heading?'Heading':'Button name')+'<input name="label" maxlength="80" value="'+esc(config.label||label)+'" required></label>':'')
+  +(heading?'':'<label>Colour picker<input name="picker" type="color" value="'+colour+'"></label><label>Hex colour<input name="colour" pattern="#[0-9a-fA-F]{6}" value="'+colour+'" required></label><label>Opacity <output>'+esc(config.opacity??defaults.opacity??100)+'%</output><input name="opacity" type="range" min="0" max="100" value="'+esc(config.opacity??defaults.opacity??100)+'"></label>')
+  +(!badge&&!heading?'<label>Navigate to<select name="destination">'+Object.entries(visualDestinations).map(([value,name])=>'<option value="'+value+'" '+(value===destination?'selected':'')+'>'+name+'</option>').join('')+'</select></label><label>External link<input name="url" type="url" maxlength="500" placeholder="https://" value="'+esc(config.url||'')+'"></label>':'')
+  +'<div class="owner-editor-actions"><button class="primary">Save Changes</button>'+(badge?'<button type="button" data-visual-reset>'+(product?'Reset to Store Default':'Reset Colour')+'</button>':'')+'</div><p role="status"></p></form>');
+ const form=modal.querySelector('#visual-settings');
+ const fields=form.elements;
+ if(fields.picker){
+  fields.picker.oninput=()=>{fields.colour.value=fields.picker.value;};
+  fields.colour.oninput=()=>{if(/^#[0-9a-f]{6}$/i.test(fields.colour.value))fields.picker.value=fields.colour.value;};
+  fields.opacity.oninput=()=>{form.querySelector('output').value=fields.opacity.value+'%';};
+ }
+ const save=async reset=>{
+  const status=form.querySelector('[role=status]');
+  if(!reset&&fields.destination?.value==='link'&&!safeImage(fields.url.value))return void(status.textContent='Enter an HTTPS link.');
+  const value=heading?{label:fields.label.value.trim()}:{colour:fields.colour.value,opacity:Number(fields.opacity.value)};
+  if(!badge&&!heading)Object.assign(value,{label:fields.label.value.trim(),destination:fields.destination.value,url:fields.url.value.trim()});
+  const controls=[...form.querySelectorAll('button')];
+  controls.forEach(control=>control.disabled=true);
+  try{
+   const token=await getSessionToken();
+   const {merchandising={}}=await contentFor(business.id,token);
+   const visual={...merchandising.visual};
+   if(reset)delete visual[key];else visual[key]=value;
+   await updateContent(business.id,{merchandising:{...merchandising,visual}},token);
+   await reloadInlineStore();
+   modal.close();
+  }catch(error){status.textContent=error.message;}
+  finally{controls.forEach(control=>control.disabled=false);}
+ };
+ form.onsubmit=event=>{event.preventDefault();save(false);};
+ form.querySelector('[data-visual-reset]')?.addEventListener('click',()=>save(true));
+ form.querySelector('[data-visual-price]')?.addEventListener('click',()=>{
+  detail(product.id);
+  modal.querySelector('[name=price]')?.focus();
+ });
+ form.querySelector('[data-visual-default]')?.addEventListener('click',()=>app.querySelector('[data-visual-key="price-default"]')?.click());
+});
