@@ -47,10 +47,14 @@ async function renderDraftChecklist(target,token){
 }
 const embeddedOwnerPreview=new URLSearchParams(location.search).get('embedded')==='1'&&window.parent!==window;
 function canEditInlineStore(){
- return storefrontPreview&&!embeddedOwnerPreview;
+ return storefrontPreview&&!embeddedOwnerPreview&&!savedStorePreview;
 }
 
 function ownerStoreToolbar(){
+ if(savedStorePreview){
+  const section=new URLSearchParams(location.search).get('return')||'Profile';
+  return '<a class="button owner-preview-back" href="/'+encodeURIComponent(business.slug)+'/owner?section='+encodeURIComponent(section)+'">← Back to Settings</a>';
+ }
  if(!storefrontPreview||!embeddedOwnerPreview)return '';
  const editorUrl='/'+encodeURIComponent(business.slug)+'?owner-preview=1';
  return '<div class="owner-store-toolbar"><a class="button primary" target="_top" href="'+editorUrl+'">Edit Store</a></div>';
