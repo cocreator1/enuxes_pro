@@ -35,10 +35,13 @@ function shopPicture(p){return imageTag(p.image||safeImage(p.gallery?.[0]),p.nam
 function shopPrice(p){return '<strong>'+(business.demo_pack&&p.price_minor===0?'N$0-00':money(price(p)))+'</strong>'+(p.sale?'<del>'+money(p.price)+'</del>':'');}
 function shopCard(p){
  const badge={...visualSetting('price-default'),...visualSetting('price:'+p.id)};
+ const quickAdd=!storefrontPreview||savedStorePreview;
+ const description=p.description?.trim();
  return '<article class="shop-card"><div class="shop-card-media"><button class="shop-photo" data-item="'+p.id+'" aria-label="View '+esc(p.name)+'">'+shopPicture(p)+'</button>'
- +'<span class="shop-price-slot"><span class="shop-price-badge" style="'+visualPaint(badge)+'">'+shopPrice(p)+'</span>'+visualDots('price:'+p.id,'price badge')+'</span></div>'
+ +'<span class="shop-price-slot"><span class="shop-price-badge" style="'+visualPaint(badge)+'">'+shopPrice(p)+'</span>'+visualDots('price:'+p.id,'price badge')+'</span>'
+ +(quickAdd?'<button type="button" class="shop-quick-add" data-quick-add="'+esc(p.id)+'" aria-label="'+(p.stock===0?'Out of stock: ':'Add to cart: ')+esc(p.name)+'" '+(p.stock===0?'disabled':'')+'>+</button>':'')+'</div>'
  +'<button class="shop-heart '+(shopFav.includes(p.id)?'liked':'')+'" data-fav="'+p.id+'" aria-label="Favourite '+esc(p.name)+'" aria-pressed="'+shopFav.includes(p.id)+'">'+shopIcon('heart')+'</button>'
- +inlineEditButton('photo',p.id,'Image')+'<div class="shop-card-copy"><button data-item="'+p.id+'">'+esc(p.name)+'</button>'+inlineEditButton('product',p.id,'Edit product')+'</div></article>';
+ +inlineEditButton('photo',p.id,'Image')+'<div class="shop-card-copy"><button data-item="'+p.id+'">'+esc(p.name)+'</button>'+(description?'<p class="shop-card-description">'+esc(description)+'</p>':'')+inlineEditButton('product',p.id,'Edit product')+'</div></article>';
 }
 function searchBox(){return '<label class="shop-search">'+shopIcon('search')+'<input id="shop-search" type="search" placeholder="Search products" aria-label="Search products" value="'+esc(shopSearch)+'"></label>';}
 function filteredItems(){const rows=shopItems().filter(p=>(!shopStock||p.stock!==0)&&(!shopSize||p.sizes?.includes(shopSize))).filter(p=>(!shopFilter||p.category===shopFilter)&&(!shopOnlyFav||shopFav.includes(p.id))&&(!shopOnlySale||p.sale)&&[p.name,p.category,p.description].join(' ').toLowerCase().includes(shopSearch.toLowerCase()));
@@ -206,6 +209,18 @@ document.addEventListener('click',async event=>{
  const button=event.target.closest('button');if(!button)return;
  const d=button.dataset;
  if(d.shopPage){if(d.shopPage==='cart')return storefrontPreview&&!savedStorePreview?openDialog('Cart preview','<p>Orders are disabled in this preview.</p>'):showCart();shopSearch=shopFilter='';shopOnlySale=shopOnlyFav=false;return changeShop(d.shopPage);}
+ if(d.quickAdd&&(!storefrontPreview||savedStorePreview)){
+  const item=getProduct(d.quickAdd);
+  if(!item?.active)return;
+  if(item.sizes?.length||item.colours?.length)return detail(item.id);
+  try{
+   addShopLine(item,{size:'',colour:''},1);
+   const nav=app.querySelector('.shop-tabs');
+   if(nav)nav.outerHTML=shopNav();
+   toast('Added to cart');
+  }catch(error){toast(error.message);}
+  return;
+ }
  if(d.item)return detail(d.item);
  if(d.fav){
   shopFav=shopFav.includes(d.fav)?shopFav.filter(id=>id!==d.fav):[...shopFav,d.fav];saveShop();
