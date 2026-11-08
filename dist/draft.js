@@ -88,7 +88,6 @@ app.addEventListener('click',event=>{
  if(kind==='sections')layoutEditor(editor,publishedContent,async()=>{await reloadInlineStore();modal.close();});
  else{
   editor.innerHTML=kind==='profile'?profileForm(business,publishedContent):productForm({},true);
-  initOwnerPhotos();
  }
 });
 
@@ -97,57 +96,6 @@ modal.addEventListener('click',event=>{
  if(!button||!canEditInlineStore())return;
  openDialog('Delete item','<div class="inline-store-editor"><form id="owner-delete-product" data-id="'+esc(button.dataset.inlineDelete)+'"><p>Remove this item from your store?</p><button class="primary">Delete item</button><button type="button" data-action="close">Cancel</button><p role="status"></p></form></div>');
 });
-
-const photoDrafts=new WeakMap();
-function initOwnerPhotos(){
- const editor=modal.querySelector('.owner-photo-editor');
- if(!editor)return;
- const state={urls:JSON.parse(editor.dataset.photos)};
- photoDrafts.set(editor,state);
- const save=editor.closest('form').querySelector('button.primary');
- const picker=(label,index)=>'<label class="owner-photo-picker">'+label+'<input type="file" aria-label="'+label+'" accept="image/jpeg,image/png,image/webp,image/gif" data-photo-slot="'+index+'" '+(index<0?'multiple':'')+'></label>';
- const render=()=>{
-  const [cover]=state.urls;
-  editor.innerHTML='<div class="owner-photo-cover">'+(cover?imageTag(cover,'Cover photo')+'<span>Cover</span>'+picker('Replace Cover',0):'<p>No photos yet</p>')+'</div>'
-   +'<small>'+state.urls.length+' / 10 photos</small><div class="owner-photo-grid">'+state.urls.map((url,i)=>'<div>'+imageTag(url,'Photo '+(i+1))+(i?'<button type="button" data-photo-cover="'+i+'">Set cover</button><button type="button" data-photo-left="'+i+'" aria-label="Move photo '+(i+1)+' earlier">←</button>':'<small>Cover</small>')+(i?picker('Replace',i):'')+'<button type="button" data-photo-remove="'+i+'">Remove</button></div>').join('')
-   +(state.urls.length<10?picker('+ Add Photos',-1):'')+'</div><p role="status"></p>';
- };
- const upload=async(files,index)=>{
-  const status=editor.querySelector('[role=status]');
-  if(index<0&&files.length+state.urls.length>10){status.textContent='Choose up to '+(10-state.urls.length)+' more photos.';return;}
-  const controls=[...editor.querySelectorAll('button,input'),save];
-  controls.forEach(control=>control.disabled=true);
-  status.textContent='Uploading '+files.length+' photo'+(files.length===1?'…':'s…');
-  try{
-   const urls=await uploadMedia(files);
-   if(index<0)state.urls.push(...urls);
-   else if(urls.length)state.urls[index]=urls[0];
-   render();
-   editor.querySelector('[role=status]').textContent='Photos ready. Save Changes to apply them.';
-  }catch(error){
-   status.textContent=error.message+' ';
-   const retry=document.createElement('button');
-   retry.type='button';retry.textContent='Retry upload';
-   retry.onclick=()=>upload(files,index);
-   status.append(retry);
-  }finally{controls.forEach(control=>control.disabled=false);}
- };
- editor.onchange=event=>{
-  const files=Array.from(event.target.files||[]);
-  if(files.length)upload(files,Number(event.target.dataset.photoSlot));
- };
- editor.onclick=event=>{
-  const button=event.target.closest('button');
-  if(!button)return;
-  const {photoCover,photoLeft,photoRemove}=button.dataset;
-  if(photoRemove!==undefined)state.urls.splice(Number(photoRemove),1);
-  else if(photoCover!==undefined)state.urls.unshift(...state.urls.splice(Number(photoCover),1));
-  else if(photoLeft!==undefined){const i=Number(photoLeft);[state.urls[i-1],state.urls[i]]=[state.urls[i],state.urls[i-1]];}
-  else return;
-  render();
- };
- render();
-}
 
 const visualDestinations={home:'Home',shop:'Shop',catalogue:'Catalogue',cart:'Cart',link:'External HTTPS link'};
 function visualSetting(key){
