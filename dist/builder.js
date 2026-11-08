@@ -223,3 +223,70 @@ document.addEventListener('drop',event=>{
   input.files=selection.files;
   input.dispatchEvent(new Event('change',{bubbles:true}));
 });
+
+async function ownerStorePreview(target,token) {
+  const store=ownerStore;
+  const filter='&business_id=eq.'+store.id;
+  const [profile,products,themes]=await Promise.all([
+    contentFor(store.id,token),
+    request('/rest/v1/products?select=id,name,category,description,price_minor,sale_price_minor,image_url,gallery,sizes,colours,stock,active&order=name'+filter,{token}),
+    request('/rest/v1/store_themes?select=accent'+filter,{token})
+  ]);
+  if(!target.isConnected)return;
+  const accent=/^#[0-9a-f]{6}$/i.test(themes[0]?.accent)?themes[0].accent:'#166047';
+  const live=products.filter(p=>p.active);
+  const sale=live.filter(p=>p.sale_price_minor);
+  const categories=[...new Set(live.map(p=>p.category).filter(Boolean))];
+  let page='home', selectedProduct, group='';
+  const action=(tab,label)=>'<button data-owner-tab="'+tab+'">'+label+'</button>';
+  const photo=p=>imageTag(p?.image_url,p?.name||'')||icon('bag','#166047');
+  const priceLabel=p=>money((p.sale_price_minor||p.price_minor)/100);
+  const cards=items=>'<div class="shop-grid">'+items.map(p=>'<article class="shop-card"><button class="shop-photo" data-preview-item="'+p.id+'">'+photo(p)+'</button><div class="shop-card-copy"><button data-preview-item="'+p.id+'">'+esc(p.name)+'</button><strong>'+priceLabel(p)+'</strong></div></article>').join('')+'</div>';
+  const empty='<div class="panel"><p>Add and show products to see them here.</p>'+action('Products','Manage products')+'</div>';
+  function render(){
+    let content;
+    if(page==='home'){
+      content='<section class="shop-profile">'+(imageTag(profile.logo,store.name)||'<div class="shop-avatar">'+esc(store.name.slice(0,1))+'</div>')
+        +'<h1>'+esc(store.name)+'</h1><p>'+esc(store.description||'Your store description goes here.')+'</p>'
+        +action('Business profile','Edit logo and description')+'</section>'
+        +'<section class="shop-sale"><strong>Store sale</strong><span>'+(sale.length?sale.length+' discounted products':'Set a sale price on a product to show this banner.')+'</span>'+action('Products','Edit sale prices')+'</section>'
+        +'<div class="row shop-heading"><h2>Featured</h2>'+action('Products','Manage products')+'</div>'
+        +(live.length?cards(live.slice(0,4)):empty)
+        +'<div class="row shop-heading"><h2>Custom sections</h2>'+action('Store builder','Edit page layout')+'</div>'
+        +'<p class="muted">'+(profile.blocks||[]).filter(block=>block.kind!=='catalogue').length+' published image, text or slideshow sections</p>';
+    }else if(page==='shop'){
+      const items=group==='sale'?sale:group?live.filter(p=>p.category===group):live;
+      content='<div class="row shop-heading"><h2>Shop</h2>'+action('Products','Manage products')+'</div>'+(items.length?cards(items):empty);
+    }else if(page==='catalogue'){
+      const groups=categories.map((name,i)=>[name,i,live.find(p=>p.category===name&&p.image_url)]);
+      if(sale.length)groups.push(['Sale','sale',sale.find(p=>p.image_url)]);
+      content='<div class="row shop-heading"><h2>Catalogue</h2>'+action('Products','Edit product categories')+'</div><div class="shop-collections">'
+        +(groups.map(([name,id,p])=>'<button class="shop-collection" data-preview-group="'+id+'">'+(p?imageTag(p.image_url):'')+'<strong>'+esc(name)+'</strong><span>›</span></button>').join('')||'<p>Product categories appear here once you add them.</p>')+'</div>';
+    }else if(page==='detail'&&selectedProduct){
+      const p=selectedProduct;
+      content='<div class="row shop-heading"><button data-preview-page="shop">← Shop</button><button data-preview-edit="'+p.id+'">Edit product</button></div>'
+        +'<div class="shop-detail-photo">'+photo(p)+(p.gallery||[]).map(url=>imageTag(url,p.name)).join('')+'</div>'
+        +'<h2>'+esc(p.name)+'</h2><strong>'+priceLabel(p)+'</strong><p>'+esc(p.description)+'</p>'
+        +'<p class="muted">'+[...(p.sizes||[]),...(p.colours||[])].map(esc).join(' · ')+'</p>'
+        +'<div class="shop-cta"><button disabled>Add to Cart</button><button disabled>Buy Now</button></div>';
+    }else{
+      content='<div class="row shop-heading"><h2>My cart</h2></div><div class="panel"><p>Your customers’ selected items and totals appear here.</p><button disabled>Checkout</button></div>';
+    }
+    target.innerHTML='<div class="row"><p class="muted">Owner preview · Shopping actions are disabled.</p>'
+      +(store.active?'<a class="button" href="/'+store.slug+'">View live store ↗</a>':'<span class="badge">Storefront unavailable</span>')+'</div>'
+      +'<div class="owner-preview shop-frame" style="--shop-tint:color-mix(in srgb,'+accent+' 16%,white)"><div class="owner-preview-content">'+content+'</div>'
+      +'<nav class="shop-tabs" aria-label="Preview screens">'+[['home','Home'],['shop','Shop'],['catalogue','Catalogue'],['cart','Cart']].map(([id,label])=>'<button data-preview-page="'+id+'" '+(page===id?'aria-current="page"':'')+'>'+shopIcon(id)+'<span>'+label+'</span></button>').join('')+'</nav></div>';
+  }
+  target.addEventListener('click',event=>{
+    const button=event.target.closest('button');
+    if(!button)return;
+    const {previewPage,previewItem,previewGroup,previewEdit}=button.dataset;
+    if(previewPage){page=previewPage;group='';}
+    else if(previewItem){selectedProduct=live.find(p=>p.id===previewItem);if(!selectedProduct)return;page='detail';}
+    else if(previewGroup!==undefined){group=previewGroup==='sale'?'sale':categories[Number(previewGroup)];page='shop';}
+    else if(previewEdit){productEditor(live.find(p=>p.id===previewEdit));return;}
+    else return;
+    render();
+  });
+  render();
+}
