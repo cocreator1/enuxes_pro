@@ -11,7 +11,7 @@ let adminStores = [];
 let section = 'overview';
 let storeQuery = '';
 let storeStatus = '';
-const sections = {overview:'Overview',stores:'Stores',owners:'Owner access',billing:'Billing',analytics:'Analytics',ads:'Ads',security:'Security',archive:'Archive'};
+const sections = {overview:'Overview',stores:'Stores',owners:'Owner access',billing:'Billing',analytics:'Analytics',ads:'Ads',support:'Support',security:'Security',archive:'Archive'};
 const businessColumns = 'id,slug,name,type,description,active';
 
 async function request(endpoint, { method = 'GET', data, token, prefer } = {}) {
@@ -73,7 +73,7 @@ function storeCard(store) {
   if (section === 'billing') buttons = store.lifecycle === 'on_hold'
     ? [['active','Release hold'],['closed','Release as closed']]
     : [['on_hold','Put on hold']];
-  if (['owners','analytics','ads'].includes(section)) buttons = [];
+  if (['owners','analytics','ads','support'].includes(section)) buttons = [];
   return '<article class="panel stack"><div class="row"><div><strong>' + esc(store.name) + '</strong><br>'
     + '<small>' + esc(store.type.replaceAll('_',' ')) + ' · ' + esc(store.package || 'Starter') + '</small></div>'
     + '<span class="badge">' + labels[store.lifecycle] + '</span></div>'
@@ -81,6 +81,7 @@ function storeCard(store) {
     + (store.status_reason ? '<small>' + esc(store.status_reason) + '</small>' : '')
     + '<div class="toolbar">' + buttons.map(([status,label]) =>
       '<button data-business-status="' + status + '" data-business-id="' + store.id + '">' + label + '</button>').join('')
+    + (section === 'support' ? '<button data-support="' + store.id + '">Open conversation</button>' : '')
     + (section === 'analytics' ? '<button data-analytics="' + store.id + '">View analytics</button>' : '')
     + (['ads','billing'].includes(section) ? '<button data-ad-settings="' + store.id + '">' + (section === 'billing' ? 'Ad-free billing' : 'Manage banner') + '</button>' : '')
     + (section === 'owners' ? '<button data-owner-link="' + ownerLink + '">Copy owner login link</button>' : '') + '</div></article>';
@@ -103,6 +104,10 @@ function dashboard() {
   const metrics = Object.entries(labels).map(([status,label]) =>
     '<button class="panel admin-metric" data-metric="' + status + '"><small>' + label + '</small><strong>'
     + adminStores.filter(store => store.lifecycle === status).length + '</strong></button>').join('');
+  const distribution = Object.entries(labels).map(([status,label]) => {
+    const count = adminStores.filter(store => store.lifecycle === status).length;
+    return '<label>' + label + ' · ' + count + '<progress value="' + count + '" max="' + Math.max(1,adminStores.length) + '"></progress></label>';
+  }).join('');
   const navItems = Object.entries(sections).map(([id,label]) =>
     '<button data-section="' + id + '" ' + (id === section ? 'class="active" aria-current="page"' : '') + '>' + label + '</button>').join('');
   const details = {
@@ -111,15 +116,16 @@ function dashboard() {
     billing:'Apply a hold for overdue accounts and release it once payment is confirmed. Payment checks are manual.',
     analytics:'Search for a store to view its recorded order activity and paid revenue.',
     ads:'Manage the sponsored banner that appears above each store catalogue.',
+    support:'Find a store and reply to its owner in a private conversation.',
     archive:'Restore deleted stores as closed before reopening them.'
   };
-  app.innerHTML = '<div class="admin-layout"><aside class="panel admin-sidebar"><small>PLATFORM</small><strong>Main Admin</strong>'
+  app.innerHTML = '<div class="admin-layout"><aside class="panel admin-sidebar">' + workspaceBrand + '<small>MAIN ADMIN</small>'
     + '<div class="admin-sections" aria-label="Main Admin sections">' + navItems + '</div></aside><section class="stack">'
-    + '<div class="row"><div><small>ENUXES ADMINISTRATION</small><h2>' + sections[section] + '</h2></div><div class="toolbar">'
+    + '<div class="row workspace-top"><div><small>ENUXES ADMINISTRATION</small><h2>' + sections[section] + '</h2></div><div class="toolbar">'
     + '<button class="primary" id="create-business">Create store</button><button id="admin-signout">Sign out</button></div></div>'
     + (section === 'overview'
-      ? '<div class="grid">' + metrics + '</div><div class="panel stack"><h2>Manage the platform</h2><div class="toolbar">'
-        + '<button data-section="stores">Manage stores</button><button data-section="owners">Owner login links</button><button data-section="billing">Review billing holds</button></div></div>'
+      ? '<div class="grid">' + metrics + '</div><div class="split"><div class="panel stack"><h2>Store status</h2>' + distribution + '</div><div class="panel stack"><h2>Manage the platform</h2><div class="toolbar">'
+        + '<button data-section="stores">Manage stores</button><button data-section="owners">Owner login links</button><button data-section="billing">Review billing holds</button><button data-section="support">Support conversations</button></div></div></div>'
       : section === 'security' ? '<div class="panel stack"><h2>Change password</h2><p class="muted">Passwords are managed by Supabase Auth.</p><form id="main-admin-password">'
         + '<label>Current password<input name="current" type="password" autocomplete="current-password" required></label>'
         + '<label>New password<input name="password" type="password" minlength="14" autocomplete="new-password" required></label>'
@@ -161,9 +167,12 @@ async function refreshDashboard() {
     const memberships = await request('/rest/v1/business_members?select=businesses!inner(' + businessColumns + ')&businesses.slug=eq.' + ownerSlug, {token});
     const store = memberships[0]?.businesses;
     if (!store) throw new Error('This account has no access to this store.');
-    app.innerHTML = '<div class="panel stack"><div class="row"><h2>' + esc(store.name) + '</h2><button id="admin-signout">Sign out</button></div>'
-      + '<p>Storefront is ' + (store.active ? 'active.' : 'unavailable to customers.') + '</p>'
-      + (store.active ? '<a href="/' + store.slug + '">View storefront ↗</a>' : '<p>Contact eNuxes support for help reopening your store.</p>') + '</div>';
+    ownerStore=store;
+    ownerDashboard();
+    clearInterval(ownerPoll);
+    ownerPoll=setInterval(()=>{
+      if (!document.hidden && ['Overview','Orders','Inventory','Notifications'].includes(ownerTab)) renderOwnerTab().catch(()=>{});
+    },30000);
     return;
   }
   adminStores = await adminRequest('platform_business_list');
@@ -196,6 +205,9 @@ document.addEventListener('click', async event => {
   if (!ownerSlug && location.pathname.replace(/\/$/,'') !== adminPath) return;
   const target = event.target.closest('button');
   if (!target) return;
+  if (target.dataset.action==='close') supportLoad++;
+  if (target.dataset.ownerTab && ownerStore) { ownerTab=target.dataset.ownerTab; return ownerDashboard(); }
+  if (target.dataset.support) return openSupport(target.dataset.support);
   if (target.dataset.section) return changeSection(target.dataset.section);
   if (target.dataset.metric) {
     const status = target.dataset.metric;
@@ -247,6 +259,8 @@ document.addEventListener('click', async event => {
   if (target.id === 'create-business') showCreate();
   if (target.id === 'admin-signout') {
     const token = adminSession?.access_token;
+    clearInterval(ownerPoll);
+    ownerStore=undefined;
     session(null);
     signIn();
     if (token) await request('/auth/v1/logout?scope=local', {method:'POST',token}).catch(()=>{});
@@ -326,10 +340,113 @@ document.addEventListener('submit', async event => {
   } finally { button.disabled = false; }
 });
 
+let ownerStore;
+let ownerTab = 'Overview';
+let ownerPoll;
+let supportLoad = 0;
+const workspaceBrand = '<a class="workspace-brand" href="/"><img src="/enuxes-lockup.svg" alt="eNuxes"></a>';
+
+function ownerDashboard() {
+  const store = ownerStore;
+  const tabs = ['Overview','Orders','Inventory','Notifications','Store settings','Support'];
+  app.innerHTML = '<div class="admin-layout"><aside class="panel admin-sidebar">' + workspaceBrand + '<small>STORE OWNER</small>'
+    + '<div class="admin-sections" aria-label="Store tools">' + tabs.map(tab => '<button data-owner-tab="' + tab + '" class="' + (tab===ownerTab?'active':'') + '">' + tab + '</button>').join('') + '</div></aside>'
+    + '<section class="stack"><header class="row workspace-top"><div><small>' + esc(store.name) + '</small><h2>' + ownerTab + '</h2></div><div class="toolbar"><button data-owner-tab="Notifications">Notifications <span id="owner-alert-count"></span></button><button id="admin-signout">Sign out</button></div></header><div id="owner-content" class="stack"></div></section></div>';
+  renderOwnerTab().catch(showOwnerError);
+}
+
+function showOwnerError() {
+  const target = document.getElementById('owner-content');
+  if (target) target.innerHTML = '<div class="panel">Could not load this section. Select its tab to retry.</div>';
+}
+
+async function renderOwnerTab() {
+  const store = ownerStore;
+  const tab = ownerTab;
+  const target = document.getElementById('owner-content');
+  const token = await getSessionToken();
+  const byStore = '&business_id=eq.' + store.id;
+  if (tab === 'Support') {
+    target.innerHTML = '<div class="panel"><h2>Support</h2><p>Chat with the eNuxes team about this store.</p><button data-support="' + store.id + '">Open conversation</button></div>';
+    return;
+  }
+  if (tab === 'Store settings') {
+    const [theme] = await request('/rest/v1/store_themes?select=accent' + byStore,{token});
+    target.innerHTML = '<div class="panel"><h2>Store appearance</h2><form id="owner-theme"><label>Store accent<input name="accent" type="color" value="' + esc(theme?.accent || '#166047') + '"></label><div><button class="primary">Save colour</button></div><p id="owner-theme-result" role="status"></p></form></div>';
+    return;
+  }
+  const [orders,stock] = await Promise.all([
+    request('/rest/v1/orders?select=id,status,payment_status,total_minor,created_at&order=created_at.desc&limit=30'+byStore,{token}),
+    request('/rest/v1/products?select=name,stock&active=eq.true&stock=lte.5&order=stock.asc&limit=30'+byStore,{token})
+  ]);
+  if (document.getElementById('owner-content') !== target) return;
+  const alerts = [...orders.flatMap(o => {
+    const order = '#' + o.id.slice(0,8).toUpperCase();
+    return [o.status==='NEW' && 'New order ' + order, o.payment_status==='PAID' && 'Payment recorded for ' + order,
+      ['PENDING','CONFIRMED','PROCESSING'].includes(o.status) && 'Pending fulfilment for ' + order,
+      o.payment_status==='PENDING' && 'Payment pending for ' + order].filter(Boolean);
+  }), ...stock.map(p => p.stock===0 ? p.name+' is out of stock' : p.name+' has '+p.stock+' left')];
+  document.getElementById('owner-alert-count').textContent = '(' + alerts.length + ')';
+  const list = (items,empty) => '<div class="panel">' + (items.map(item => '<p class="line">'+esc(item)+'</p>').join('') || '<p>'+empty+'</p>') + '</div>';
+  if (tab==='Orders') target.innerHTML = list(orders.map(o=> '#'+o.id.slice(0,8).toUpperCase()+' · '+o.status+' · '+o.payment_status+' · '+money(o.total_minor/100)),'No recorded orders.');
+  else if (tab==='Inventory') target.innerHTML = list(stock.map(p=>p.name+' · '+p.stock+' remaining'),'No active products have five or fewer units.');
+  else if (tab==='Notifications') target.innerHTML = list(alerts,'No alerts right now.');
+  else target.innerHTML = '<div class="grid">' + [['Recent orders',orders.length],['Low-stock products',stock.length],['Alerts',alerts.length]].map(([label,count])=>'<div class="panel admin-metric"><small>'+label+'</small><strong>'+count+'</strong></div>').join('')+'</div><div class="panel"><h2>Storefront</h2>'+(store.active?'<a href="/'+store.slug+'">View storefront ↗</a>':'<p>Unavailable to customers. Contact eNuxes support for help.</p>')+'</div>';
+}
+
+async function openSupport(id) {
+  const store = ownerSlug ? ownerStore : adminStores.find(item => item.id===id);
+  if (!store || store.id!==id) return;
+  const generation = ++supportLoad;
+  const title = 'Support · ' + store.name;
+  openDialog(title,'<p>Loading conversation…</p>');
+  try {
+    const messages = await request('/rest/v1/store_support_messages?select=sender_role,body,created_at&business_id=eq.'+id+'&order=created_at.desc,id.desc&limit=50',{token:await getSessionToken()});
+    if (generation!==supportLoad || !modal.open) return;
+    openDialog(title,'<div class="support-log" aria-label="Recent messages">' + (messages.reverse().map(message =>
+      '<article class="support-message"><small>'+ (message.sender_role==='platform'?'eNuxes support':'Store owner') + ' · ' + esc(new Date(message.created_at).toLocaleString('en-NA',{timeZone:'Africa/Windhoek'})) + '</small><p>'+esc(message.body)+'</p></article>').join('') || '<p>No messages yet.</p>')
+      + '</div><form id="support-message" data-id="'+id+'"><label>Message<textarea name="body" required maxlength="2000" rows="3"></textarea></label><div class="row"><button class="primary">Send</button><button type="button" data-support="'+id+'">Refresh conversation</button></div><p id="support-result" role="status"></p></form>');
+    const log=modal.querySelector('.support-log');log.scrollTop=log.scrollHeight;
+  } catch { if (generation===supportLoad && modal.open) openDialog(title,'<p>Could not load the conversation.</p>'); }
+}
+
+document.addEventListener('submit', async event => {
+  const form=event.target;
+  if (!['support-message','owner-theme'].includes(form.id)) return;
+  event.preventDefault();
+  const button=form.querySelector('button');
+  button.disabled=true;
+  const fields=new FormData(form);
+  try {
+    const token=await getSessionToken();
+    if (form.id==='support-message') {
+      const body=fields.get('body').trim();
+      if (!body) throw new Error('Enter a message first.');
+      await request('/rest/v1/store_support_messages',{method:'POST',token,data:{business_id:form.dataset.id,sender_role:ownerSlug?'owner':'platform',body}});
+      if (modal.open && modal.contains(form)) await openSupport(form.dataset.id);
+    } else {
+      await request('/rest/v1/store_themes?on_conflict=business_id',{method:'POST',token,prefer:'resolution=merge-duplicates',data:{business_id:ownerStore.id,accent:fields.get('accent')}});
+      const status=form.querySelector('[role=status]');
+      status.textContent='Store colour saved.';
+    }
+  } catch (error) { form.querySelector('[role=status]').textContent=error.message; }
+  finally { button.disabled=false; }
+});
+
+function applyStoreTheme(accent) {
+  document.body.classList.add('shop-surface');
+  if (!/^#[a-f0-9]{6}$/i.test(accent || '')) return;
+  document.body.style.setProperty('--shop-tint','color-mix(in srgb, '+accent+' 16%, white)');
+  const rgb=accent.slice(1).match(/../g).map(n=>parseInt(n,16));
+  const luminance=rgb.map(v=>v/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4).reduce((sum,v,i)=>sum+v*[.2126,.7152,.0722][i],0);
+  document.body.style.setProperty('--shop-ink',luminance<=.183?accent:'color-mix(in srgb, '+accent+' 44%, black)');
+}
+
 async function boot() {
   nav.innerHTML = '<a class="brand" href="/"><img src="/enuxes-logo.svg" width="34" height="34" alt="">eNuxes</a><a href="/">Businesses</a>';
   document.querySelector('footer').textContent = 'eNuxes · Commerce & hospitality';
   if (ownerSlug || location.pathname.replace(/\/$/,'') === adminPath) {
+    document.body.classList.add('workspace');
     app.innerHTML = '<p>Loading sign-in…</p>';
     try {
       adminSession = JSON.parse(sessionStorage.getItem(sessionKey) || 'null');
@@ -338,6 +455,7 @@ async function boot() {
     } catch (error) { session(null); signIn(error.message); }
     return;
   }
+  applyStoreTheme();
   app.innerHTML = '<p>Loading…</p>';
   const parts = location.pathname.split('/').filter(Boolean);
   try {
@@ -364,6 +482,8 @@ async function boot() {
     }));
     const ads = await request('/rest/v1/store_ad_settings?select=title,image_url,destination_url&business_id=eq.' + business.id).catch(()=>[]);
     storeBanner = ads[0] || null;
+    const [theme] = await request('/rest/v1/store_themes?select=accent&business_id=eq.' + business.id).catch(()=>[]);
+    applyStoreTheme(theme?.accent);
     storefront();
   } catch { app.innerHTML = '<h2>Temporarily unavailable</h2><p>Refresh the page to try again.</p>'; }
 }
