@@ -83,6 +83,11 @@ body.workspace {background:#fff}
 .owner-image-picker input{position:absolute;inset:0;width:100%;opacity:0;cursor:pointer}
 .owner-image-picker:focus-within{outline:2px solid var(--shop-ink,#166047);outline-offset:2px}
 #owner-image-status:empty{display:none}
+.builder-shell{gap:12px}.builder-publish{position:sticky;top:0;z-index:2;background:#fff;padding:10px 0;border-bottom:1px solid var(--border)}
+.builder-publish h2,.builder-publish p{margin:0}.builder-publish p{margin-top:4px;color:#40576c}.builder-publish [data-error=true]{color:#a1291d}
+.builder-tools{margin:0}.builder-shell [data-block]{padding:12px;gap:8px}.builder-shell [data-block] .toolbar{margin:0}
+#builder-preview .store-media{margin:10px 0}
+@media(max-width:760px){.builder-publish .toolbar button,.builder-tools button{min-height:44px}.builder-publish .toolbar{margin:0}.builder-publish small{display:block}}
 </style><link rel="stylesheet" href="/shop.css"></head><body><header><nav id="nav"></nav></header><main id="app"></main><footer>eNuxes · Commerce & hospitality <span class="muted"> / Demo workspace</span></footer><dialog id="modal"></dialog><div id="toast" role="status"></div>
 <script>
 'use strict';
