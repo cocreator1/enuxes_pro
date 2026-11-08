@@ -188,3 +188,5 @@ body:has(.shop-frame>.shop-tabs-owner) footer{margin-bottom:calc(112px + env(saf
 .shop-profile-banner :is(h1,small,.muted){color:#fff}
 .shop-profile-banner button{color:#172441}
 #owner-profile fieldset img{display:block;width:100%;max-height:160px;object-fit:contain}
+
+.workspace .owner-dashboard .admin-sidebar>small:last-of-type{text-align:center}
