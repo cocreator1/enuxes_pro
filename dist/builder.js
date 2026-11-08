@@ -217,6 +217,9 @@ document.addEventListener('submit',async event=>{
       await request('/rest/v1/businesses?id=eq.'+ownerStore.id,{method:'PATCH',token,data:{name:value('name'),description:value('description')}});
       await updateContent(ownerStore.id,{email:value('email'),phone:value('phone'),category:value('category'),...(logo?{logo}:{})},token);
       ownerStore.name=value('name');ownerStore.description=value('description');
+      const logoImage=app.querySelector('.owner-brand img');
+      if(logo&&logoImage)logoImage.src=logo;
+      if(!storefrontPreview)signalStorefrontSave(ownerStore.slug);
     }else{
       const photos=photoDrafts.get(form.querySelector('.owner-photo-editor'));
       const [photo,...gallery]=photos?photos.urls:await uploadMedia(data.getAll('photo'));
