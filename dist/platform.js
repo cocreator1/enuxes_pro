@@ -239,6 +239,10 @@ document.addEventListener('click', async event => {
   const target = event.target.closest('button');
   if (!target) return;
   if (target.dataset.action==='close') supportLoad++;
+  if (target.hasAttribute('data-owner-storefront') && ownerStore) {
+    location.assign('/'+encodeURIComponent(ownerStore.slug)+'?owner-preview=1');
+    return;
+  }
   if (target.dataset.ownerTab && ownerStore) { ownerTab=target.dataset.ownerTab; return ownerDashboard(); }
   if (target.dataset.layoutLimit) return openLayoutLimit(target.dataset.layoutLimit);
   if (target.dataset.support) return openSupport(target.dataset.support);
@@ -407,7 +411,7 @@ document.addEventListener('submit', async event => {
 });
 
 let ownerStore;
-let ownerTab = 'My Store';
+let ownerTab = 'Profile';
 const ownerProfileTabs = ['Business profile','Store settings','Account','Support'];
 let ownerPoll;
 let supportLoad = 0;
@@ -415,10 +419,10 @@ const workspaceBrand = '<a class="workspace-brand" href="/"><img src="/enuxes-lo
 
 function ownerDashboard() {
   const store = ownerStore;
-  const tabs = ['My Store','Orders','Inventory','Products','Store builder','Home Layout',...(store.slug==='trendora'?['Merchandising','Delivery']:[]),'Profile'];
+  const tabs = ['My Store','Orders','Inventory','Products','Store builder','Home Layout',...(store.slug==='trendora'?['Merchandising','Delivery']:[]),'Profile',...(!store.active&&!store.owner_published_at?['Ready to Publish']:[])];
   const selected = ownerProfileTabs.includes(ownerTab) ? 'Profile' : ownerTab;
-  app.innerHTML = '<div class="admin-layout"><aside class="panel admin-sidebar">' + workspaceBrand + '<small>STORE OWNER</small>'
-    + '<div class="admin-sections" aria-label="Store tools">' + tabs.map(tab => '<button data-owner-tab="' + tab + '" class="' + (tab===selected?'active':'') + '">' + tab + '</button>').join('') + '</div></aside>'
+  app.innerHTML = '<div class="admin-layout owner-dashboard"><aside class="panel admin-sidebar">' + workspaceBrand + '<small>STORE OWNER</small>'
+    + '<nav class="admin-sections" aria-label="Store tools">' + tabs.map(tab => '<button ' + (tab==='My Store'?'data-owner-storefront':'data-owner-tab="'+tab+'"') + (tab===selected?' class="active" aria-current="page"':'') + '>' + tab + '</button>').join('') + '</nav></aside>'
     + '<section class="stack"><header class="row workspace-top"><div><small>' + esc(store.name) + '</small><h2>' + ownerTab + '</h2></div><div class="toolbar"><button data-owner-tab="Notifications">Notifications <span id="owner-alert-count"></span></button><button id="admin-signout">Sign out</button></div></header><div id="owner-content" class="stack"></div></section></div>';
   revealWorkspaceTab();
   renderOwnerTab().catch(showOwnerError);
@@ -446,7 +450,6 @@ async function renderOwnerTab() {
   }
   if(tab==='Home Layout')return ownerHomeLayout(target,token);
   if(tab==='Ready to Publish')return renderDraftChecklist(target,token);
-  if(tab==='My Store')return renderSharedOwnerPreview(target);
   if (tab==='Profile') {
     target.innerHTML='<section class="panel stack"><h2>Profile</h2><p>Manage your store identity, appearance, password and support.</p><div class="toolbar">'
       +ownerProfileTabs.map(label=>'<button data-owner-tab="'+label+'">'+label+'</button>').join('')+'</div></section>';
