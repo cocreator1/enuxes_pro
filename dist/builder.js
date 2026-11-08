@@ -40,7 +40,7 @@ async function ownerEditor(tab,target,token) {
     return;
   }
   if(tab==='Products'){
-    const rows=await request('/rest/v1/products?select=id,name,category,description,price_minor,image_url,active&business_id=eq.'+ownerStore.id+'&order=name',{token});
+    const rows=await request('/rest/v1/products?select=id,name,category,description,price_minor,sale_price_minor,image_url,gallery,sizes,colours,stock,active&business_id=eq.'+ownerStore.id+'&order=name',{token});
     target.innerHTML='<section class="panel stack"><div class="row"><h2>Products</h2><button id="owner-add-product">Add product</button></div>'
       +(rows.map((row,i)=>'<div class="row line"><span>'+esc(row.name)+'</span><button data-product-edit="'+i+'">Edit</button></div>').join('')||'<p>No products yet.</p>')+'</section>';
     target.addEventListener('click',event=>{
@@ -68,7 +68,11 @@ function productEditor(product={}){
     +field('Product name','name',product.name,100,'text',true)+field('Category','category',product.category,80,'text',true)
     +'<label>Description<textarea name="description" maxlength="1000">'+esc(product.description)+'</textarea></label>'
     +'<label>Price (N$)<input name="price" type="number" min=".01" max="21474836.47" step=".01" required value="'+(product.price_minor?product.price_minor/100:'')+'"></label>'
-    +imageTag(product.image_url,'Current product photo')+uploadField('photo')
+    +'<label>Sale price (N$)<input name="sale" type="number" min=".01" max="21474836.47" step=".01" value="'+(product.sale_price_minor?product.sale_price_minor/100:'')+'"></label>'
+    +field('Sizes (comma separated)','sizes',product.sizes?.join(', '),240)
+    +field('Colours (comma separated)','colours',product.colours?.join(', '),240)
+    +'<label>Stock (blank if untracked)<input name="stock" type="number" min="0" max="2147483647" step="1" value="'+esc(product.stock)+'"></label>'
+    +imageTag(product.image_url,'Current product photo')+uploadField('photo',true)+'<small>Select up to 10 photos to replace the gallery. The first is the cover.</small>'
     +'<label><span><input type="checkbox" name="active" '+(product.active===false?'':'checked')+'> Show in catalogue</span></label>'
     +'<button class="primary">Save product</button><p role="status"></p></form>');
 }
@@ -145,8 +149,12 @@ document.addEventListener('submit',async event=>{
       await updateContent(ownerStore.id,{email:value('email'),phone:value('phone'),category:value('category'),...(logo?{logo}:{})},token);
       ownerStore.name=value('name');ownerStore.description=value('description');
     }else{
-      const [photo]=await uploadMedia(data.getAll('photo'));
-      const product={name:value('name'),category:value('category'),description:value('description'),price_minor:Math.round(Number(value('price'))*100),active:data.has('active'),...(photo?{image_url:photo}:{})};
+      const [photo,...gallery]=await uploadMedia(data.getAll('photo'));
+      const product={name:value('name'),category:value('category'),description:value('description'),price_minor:Math.round(Number(value('price'))*100),active:data.has('active'),...(photo?{image_url:photo,gallery}:{})};
+      product.sale_price_minor=value('sale')?Math.round(Number(value('sale'))*100):null;
+      product.sizes=value('sizes').split(',').map(s=>s.trim()).filter(Boolean);
+      product.colours=value('colours').split(',').map(s=>s.trim()).filter(Boolean);
+      product.stock=value('stock')?Number(value('stock')):null;
       const id=form.dataset.id;
       await request('/rest/v1/products'+(id?'?id=eq.'+id+'&business_id=eq.'+ownerStore.id:''),{method:id?'PATCH':'POST',token,data:id?product:{...product,business_id:ownerStore.id}});
       modal.close();ownerDashboard();toast('Product saved.');return;
@@ -168,6 +176,14 @@ async function openLayoutLimit(id){
 
 function renderPublishedLayout(){
   if(!publishedContent)return;
+  const shopHome=app.querySelector('.shop-content');
+  if(shopHome){
+    const catalogue=shopHome.querySelector('#products');
+    const heading=shopHome.querySelector('#browse');
+    if(!catalogue||!heading)return;
+    const group=document.createElement('section');group.className='stack';group.append(heading,catalogue);
+    appendPublishedBlocks(shopHome,group,publishedContent.blocks);return;
+  }
   const {logo,email,phone,category,blocks}=publishedContent;
   const hero=app.querySelector('.hero section');
   if(hero){
@@ -180,12 +196,16 @@ function renderPublishedLayout(){
   const catalogue=document.createElement('section');
   catalogue.className='stack';
   catalogue.append(heading,heading.nextElementSibling,app.querySelector('#products'));
+  appendPublishedBlocks(app,catalogue,blocks);
+}
+
+function appendPublishedBlocks(target,catalogue,blocks){
   for(const block of blocks||starterBlocks()){
-    if(block.kind==='catalogue') app.append(catalogue);
-    else if(block.kind==='text'&&block.text) app.insertAdjacentHTML('beforeend','<section class="panel store-copy">'+esc(block.text)+'</section>');
+    if(block.kind==='catalogue') target.append(catalogue);
+    else if(block.kind==='text'&&block.text) target.insertAdjacentHTML('beforeend','<section class="panel store-copy">'+esc(block.text)+'</section>');
     else if(['image','slideshow'].includes(block.kind) && Array.isArray(block.images)){
       const images=block.images.map((url,i)=>imageTag(url,'Store image '+(i+1))).join('');
-      if(images)app.insertAdjacentHTML('beforeend','<section tabindex="0" aria-label="'+(block.kind==='slideshow'?'Swipe through store photos':'Store photo')+'" class="panel store-media '+(block.kind==='slideshow'?'store-slides':'')+'">'+images+'</section>');
+      if(images)target.insertAdjacentHTML('beforeend','<section tabindex="0" aria-label="'+(block.kind==='slideshow'?'Swipe through store photos':'Store photo')+'" class="panel store-media '+(block.kind==='slideshow'?'store-slides':'')+'">'+images+'</section>');
     }
   }
 }
