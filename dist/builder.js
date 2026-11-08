@@ -85,10 +85,10 @@ function productEditor(product={}){
 }
 
 function productForm(product={},inPlace=false){
-  const media=uploadField('photo',true)+'<small>Select up to 10 photos to replace the gallery. The first is the cover.</small>';
-  const photos=[product.image_url,...(product.gallery||[])].filter(safeImage);
-  const imagePicker='<div class="owner-photo-editor" data-photos="'+esc(JSON.stringify(photos.slice(0,10)))+'"></div>';
-  return '<form id="owner-product" data-id="'+(product.id||'')+'">'+(inPlace?imagePicker:'')
+  const image=safeImage(product.image_url)||safeImage(product.gallery?.[0]);
+  const imagePicker='<div class="owner-photo-editor">'+(imageTag(image,'Product image')||'<p>No product image</p>')
+    +'<label>'+ (image?'Replace image':'Add image') +'<input name="photo" type="file" accept="image/jpeg,image/png,image/webp,image/gif"></label></div>';
+  return '<form id="owner-product" data-id="'+(product.id||'')+'">'+imagePicker
     +field('Product name','name',product.name,100,'text',true)+field('Category','category',product.category,80,'text',true)
     +'<label>Description<textarea name="description" maxlength="1000">'+esc(product.description)+'</textarea></label>'
     +'<label>Price (N$)<input name="price" type="number" min="'+(product.price_minor===0?'0':'.01')+'" max="21474836.47" step=".01" required value="'+(product.price_minor==null?'':product.price_minor/100)+'"></label>'
@@ -96,7 +96,6 @@ function productForm(product={},inPlace=false){
     +field('Sizes (comma separated)','sizes',product.sizes?.join(', '),240)
     +field('Colours (comma separated)','colours',product.colours?.join(', '),240)
     +'<label>Stock (blank if untracked)<input name="stock" type="number" min="0" max="2147483647" step="1" value="'+esc(product.stock)+'"></label>'
-    +(inPlace?'':imageTag(product.image_url,'Current product photo')+media)
     +'<label><span><input type="checkbox" name="active" '+(product.active===false?'':'checked')+'> Show in catalogue</span></label>'
     +'<div class="owner-editor-actions"><button class="primary">Save Changes</button>'+(inPlace?'<button type="button" data-action="close">Cancel</button>':'')+'</div><p role="status"></p></form>';
 }
@@ -223,9 +222,8 @@ document.addEventListener('submit',async event=>{
       if(logo&&logoImage)logoImage.src=logo;
       if(!storefrontPreview)signalStorefrontSave(ownerStore.slug);
     }else{
-      const photos=photoDrafts.get(form.querySelector('.owner-photo-editor'));
-      const [photo,...gallery]=photos?photos.urls:await uploadMedia(data.getAll('photo'));
-      const product={name:value('name'),category:value('category'),description:value('description'),price_minor:Math.round(Number(value('price'))*100),active:data.has('active'),...(photo||photos?{image_url:photo||null,gallery}:{})};
+      const [photo]=await uploadMedia([data.get('photo')]);
+      const product={name:value('name'),category:value('category'),description:value('description'),price_minor:Math.round(Number(value('price'))*100),active:data.has('active'),...(photo?{image_url:photo,gallery:[]}:{})};
       product.sale_price_minor=value('sale')?Math.round(Number(value('sale'))*100):null;
       product.sizes=value('sizes').split(',').map(s=>s.trim()).filter(Boolean);
       product.colours=value('colours').split(',').map(s=>s.trim()).filter(Boolean);
@@ -381,7 +379,7 @@ async function ownerStorePreview(target,token) {
     }else if(page==='detail'&&selectedProduct){
       const p=selectedProduct;
       content='<div class="row shop-heading"><button data-preview-page="shop">← Shop</button><button data-preview-edit="'+p.id+'">Edit product</button></div>'
-        +'<div class="shop-detail-photo">'+photo(p)+(p.gallery||[]).map(url=>imageTag(url,p.name)).join('')+'</div>'
+        +'<div class="shop-detail-photo">'+photo(p)+'</div>'
         +'<h2>'+esc(p.name)+'</h2><strong>'+priceLabel(p)+'</strong><p>'+esc(p.description)+'</p>'
         +'<p class="muted">'+[...(p.sizes||[]),...(p.colours||[])].map(esc).join(' · ')+'</p>'
         +'<div class="shop-cta"><button disabled>Add to Cart</button><button disabled>Buy Now</button></div>';
