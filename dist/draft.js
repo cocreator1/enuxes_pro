@@ -54,16 +54,14 @@ function renderSharedOwnerPreview(target){
 }
 
 const embeddedOwnerPreview=new URLSearchParams(location.search).get('embedded')==='1'&&window.parent!==window;
-let ownerEditing=!embeddedOwnerPreview;
 function canEditInlineStore(){
- return storefrontPreview&&ownerEditing;
+ return storefrontPreview&&!embeddedOwnerPreview;
 }
 
 function ownerStoreToolbar(){
- if(!storefrontPreview)return '';
+ if(!storefrontPreview||!embeddedOwnerPreview)return '';
  const editorUrl='/'+encodeURIComponent(business.slug)+'?owner-preview=1';
- if(embeddedOwnerPreview)return '<div class="owner-store-toolbar"><a class="button primary" target="_top" href="'+editorUrl+'">Edit Store</a></div>';
- return '<div class="owner-store-toolbar"><a class="button" href="/'+encodeURIComponent(business.slug)+'/owner">Back to Panel 2</a><button data-owner-mode="edit" aria-pressed="'+ownerEditing+'">Edit Store</button><button data-owner-mode="preview" aria-pressed="'+!ownerEditing+'">Preview</button><button data-owner-save disabled>Save Changes</button><small role="status">All changes saved</small></div>';
+ return '<div class="owner-store-toolbar"><a class="button primary" target="_top" href="'+editorUrl+'">Edit Store</a></div>';
 }
 
 function inlineEditButton(kind,id,label){
@@ -87,16 +85,6 @@ async function reloadInlineStore(){
 }
 
 app.addEventListener('click',event=>{
- if(event.target.closest('[data-owner-save]')){modal.querySelector('.inline-store-editor form')?.requestSubmit();return;}
- const mode=event.target.closest('[data-owner-mode]');
- if(mode&&storefrontPreview){
-  ownerEditing=mode.dataset.ownerMode==='edit';
-  const top=window.scrollY;
-  renderShop();
-  window.scrollTo(0,top);
-  app.querySelector('[data-owner-mode="'+mode.dataset.ownerMode+'"]')?.focus({preventScroll:true});
-  return;
- }
  const button=event.target.closest('[data-inline-edit]');
  if(!button||!canEditInlineStore())return;
  const {inlineEdit:kind,inlineId:id}=button.dataset;
@@ -144,7 +132,6 @@ function initOwnerPhotos(){
    else if(urls.length)state.urls[index]=urls[0];
    render();
    editor.querySelector('[role=status]').textContent='Photos ready. Save Changes to apply them.';
-   markOwnerEditor('Unsaved changes');
   }catch(error){
    status.textContent=error.message+' ';
    const retry=document.createElement('button');
@@ -166,21 +153,6 @@ function initOwnerPhotos(){
   else if(photoLeft!==undefined){const i=Number(photoLeft);[state.urls[i-1],state.urls[i]]=[state.urls[i],state.urls[i-1]];}
   else return;
   render();
-  markOwnerEditor('Unsaved changes');
  };
  render();
 }
-
-function markOwnerEditor(message){
- const status=app.querySelector('.owner-store-toolbar [role=status]');
- if(status)status.textContent=message;
- const save=app.querySelector('[data-owner-save]');
- if(save)save.disabled=message!=='Unsaved changes';
-}
-modal.addEventListener('input',event=>{
- if(event.target.closest('.inline-store-editor'))markOwnerEditor('Unsaved changes');
-});
-modal.addEventListener('submit',event=>{
- if(event.target.closest('.inline-store-editor'))markOwnerEditor('Saving…');
-});
-modal.addEventListener('close',()=>markOwnerEditor('All changes saved'));
