@@ -125,3 +125,10 @@ dialog.owner-edit-sheet{position:fixed;inset:0 0 0 auto;margin:0;width:min(520px
  .shop-frame>.shop-tabs{position:fixed;inset:auto 0 0;transform:none;margin-inline:auto;width:100%}
  body:has(.shop-frame>.shop-tabs) footer{padding-bottom:calc(5rem + env(safe-area-inset-bottom))}
 }
+
+.workspace .owner-dashboard .admin-sections button{width:100%;justify-content:center;text-align:center}
+.workspace .owner-dashboard .owner-brand{width:100%;max-width:none;margin:0;padding:.5rem;color:#172441;background:#fff}
+.owner-brand span{display:block;margin-top:.25rem;font-size:.75rem}
+.owner-profile-tabs{display:flex;gap:.45rem;overflow-x:auto;min-width:0;padding:.25rem;overscroll-behavior-inline:contain}
+.owner-profile-tabs button{flex:none;min-height:44px;white-space:nowrap;border-radius:999px;padding-inline:.7rem}
+.owner-profile-tabs button[aria-current=page]{background:#dbedf8;color:#173b56}
