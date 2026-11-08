@@ -206,3 +206,16 @@ body:has(.owner-dashboard)>header #nav{max-width:none;margin-inline:0;justify-co
 
 .owner-profile-tabs .owner-profile-signout{background:#e5f1fa;color:#173b56}
 .owner-preview-back{margin-bottom:.65rem;font-size:.85rem;min-height:44px}
+
+.customer-shop main:has(.shop-frame>.shop-tabs){padding-bottom:1rem}
+body:has(.shop-frame>.shop-tabs)>footer{
+ width:min(880px,calc(100% - 64px));
+ padding-inline:0;
+ padding-bottom:.75rem;
+}
+@media(max-width:760px){
+ body:has(.shop-frame>.shop-tabs)>footer{width:min(880px,calc(100% - 32px))}
+}
+@media(max-width:460px){
+ body:has(.shop-frame>.shop-tabs)>footer{width:calc(100% - 24px)}
+}
