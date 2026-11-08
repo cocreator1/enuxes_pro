@@ -124,8 +124,8 @@ dialog.owner-edit-sheet{position:fixed;inset:0 0 0 auto;margin:0;width:min(520px
 .owner-brand-status:empty{display:none}
 .workspace .owner-dashboard .owner-brand-status{letter-spacing:0;overflow-wrap:anywhere}
 .owner-brand span{display:none}
-.owner-profile-tabs{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(8rem,1fr);gap:.55rem;overflow-x:auto;min-width:0;padding:.25rem;overscroll-behavior-inline:contain}
-.owner-profile-tabs button{min-height:88px;white-space:normal;border-radius:14px;padding:.7rem;text-align:center;background:#fff}
+.owner-profile-tabs{display:grid;grid-template-columns:minmax(0,1fr);gap:.55rem;width:min(100%,16rem);justify-self:start}
+.owner-profile-tabs button{width:100%;min-height:48px;white-space:normal;border-radius:12px;padding:.7rem 1rem;text-align:left;background:#fff}
 .owner-profile-tabs button[aria-current=page]{background:#dbedf8;color:#173b56}
 
 .shop-card-media{position:relative}
