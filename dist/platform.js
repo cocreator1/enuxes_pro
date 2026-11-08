@@ -65,9 +65,14 @@ function signIn(message = '') {
 }
 
 const labels = {active:'Active',closed:'Closed',on_hold:'On hold',deleted:'Archived'};
+function ownerLoginLink(slug) {
+  const url = esc(storefrontRoot + '/' + encodeURIComponent(slug) + '/owner');
+  return '<div class="toolbar"><a href="' + url + '" style="overflow-wrap:anywhere">Owner login · ' + url + '</a>'
+    + '<button data-owner-link="' + url + '">Copy owner login link</button></div>';
+}
+
 function storeCard(store) {
   const link = storefrontRoot + '/' + store.slug;
-  const ownerLink = link + '/owner';
   let buttons = store.lifecycle === 'deleted'
     ? [['closed','Restore as closed']]
     : [['active','Activate'],['closed','Close'],['on_hold','Put on hold'],['deleted','Delete']].filter(([status]) => status !== store.lifecycle);
@@ -79,6 +84,7 @@ function storeCard(store) {
     + '<small>' + esc(store.type.replaceAll('_',' ')) + ' · ' + esc(store.package || 'Starter') + '</small></div>'
     + '<span class="badge">' + labels[store.lifecycle] + '</span></div>'
     + (store.lifecycle === 'active' ? '<a href="' + link + '">' + link + ' ↗</a>' : '<small>' + link + '</small>')
+    + ownerLoginLink(store.slug)
     + (store.status_reason ? '<small>' + esc(store.status_reason) + '</small>' : '')
     + '<div class="toolbar">' + buttons.map(([status,label]) =>
       '<button data-business-status="' + status + '" data-business-id="' + store.id + '">' + label + '</button>').join('')
@@ -86,7 +92,7 @@ function storeCard(store) {
     + (section === 'support' ? '<button data-support="' + store.id + '">Open conversation</button>' : '')
     + (section === 'analytics' ? '<button data-analytics="' + store.id + '">View analytics</button>' : '')
     + (['ads','billing'].includes(section) ? '<button data-ad-settings="' + store.id + '">' + (section === 'billing' ? 'Ad-free billing' : 'Manage banner') + '</button>' : '')
-    + (section === 'owners' ? '<button data-owner-link="' + ownerLink + '">Copy owner login link</button>' : '') + '</div></article>';
+    + '</div></article>';
 }
 
 function renderStoreRows() {
@@ -339,7 +345,9 @@ document.addEventListener('submit', async event => {
       }});
       section = 'stores';
       storeQuery = storeStatus = '';
-      modal.close();
+      openDialog('Store created', '<p>Share this link with the assigned owner so they can sign in and start editing.</p>' + ownerLoginLink(values.slug));
+      try { await refreshDashboard(); } catch { toast('Refresh to reload the store list.'); }
+      return;
     } else {
       await adminRequest('platform_set_business_status', {
         p_id:form.dataset.id, p_status:form.dataset.status, p_reason:values.reason
