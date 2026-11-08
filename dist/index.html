@@ -18,6 +18,24 @@
 .main-admin button:focus-visible,.main-admin input:focus-visible,.main-admin select:focus-visible,.main-admin a:focus-visible{outline:3px solid #537f9c}
 .store-ad{margin:0 0 26px;padding:12px}.store-ad img{display:block;width:100%;max-height:240px;object-fit:contain;border-radius:8px}.store-ad small{display:block;margin-bottom:6px}
 .brand{display:inline-flex;align-items:center;gap:7px}.brand img{display:block;width:34px;height:34px;object-fit:contain}
+.workspace main{max-width:1500px}.workspace .admin-layout{grid-template-columns:236px minmax(0,1fr);gap:22px}
+.workspace .admin-sidebar{background:#142733;color:#fff;border-color:#142733;position:sticky;top:16px;padding:16px;border-radius:18px}
+.workspace .admin-sidebar small{color:#c7d8e1;letter-spacing:.12em;font-size:11px}
+.workspace-brand{display:block;background:#fff;border-radius:12px;padding:12px;margin-bottom:13px}
+.workspace-brand img{display:block;width:100%;height:51px;object-fit:contain}
+.workspace .admin-sections button{justify-content:flex-start;min-height:43px;color:#e8f2f7;background:transparent;border:1px solid transparent}
+.workspace .admin-sections button.active,.workspace .admin-sections button:hover{color:#173b56;background:#dbedf8;border-color:#dbedf8}
+.workspace .workspace-top{background:white;border:1px solid var(--border);border-radius:16px;padding:15px 19px}
+.workspace .admin-metric strong{font-size:32px}.workspace .admin-metric:first-child{background:#1752a0;color:#fff;border-color:#1752a0}.workspace .admin-metric:first-child small{color:#e3f0ff}
+.workspace .admin-metric{min-height:104px}
+.support-log{max-height:42vh;overflow:auto;display:grid;gap:8px}.support-message{padding:10px;background:#edf5fb;border-radius:10px}.support-message p{white-space:pre-wrap;overflow-wrap:anywhere;margin:4px 0}
+.shop-surface{background:linear-gradient(150deg,#eef1e8,#f7f8f3 55%,#e9efe8);--blue:var(--shop-ink,#166047);--border:#dde5db}
+.shop-surface .hero{background:linear-gradient(115deg,var(--shop-ink,#166047),#182e27)}
+.shop-surface .active,.shop-surface .badge{background:var(--shop-tint,#dceee2);border-color:#d6e3d7;color:var(--shop-ink,#166047)}
+.shop-surface .card{border-radius:19px}.shop-surface .art{background:var(--shop-tint,#dceee2)!important}
+.shop-surface .search{border-radius:22px;background:#f9fcf8}
+@media(max-width:760px){.workspace .admin-layout{grid-template-columns:1fr;gap:13px}.workspace .admin-sidebar{position:static}.workspace-brand{max-width:190px;margin-bottom:5px}.workspace .admin-sections{display:flex;flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px}.workspace .admin-sections button{white-space:nowrap}.workspace .workspace-top{padding:13px}.workspace .toolbar{margin:5px 0}.workspace .admin-metric strong{font-size:26px}}
+.workspace progress{width:100%;height:10px;accent-color:#2869b1}
 </style></head><body><header><nav id="nav"></nav></header><main id="app"></main><footer>eNuxes · Commerce & hospitality <span class="muted"> / Demo workspace</span></footer><dialog id="modal"></dialog><div id="toast" role="status"></div>
 <script>
 'use strict';
