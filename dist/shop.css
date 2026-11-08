@@ -164,3 +164,18 @@ body:has(.shop-frame>.shop-tabs-owner) footer{margin-bottom:calc(112px + env(saf
  content:"";position:absolute;z-index:-1;inset:0 calc((100% - 100vw)/2);
  background:inherit;border-radius:inherit;
 }
+
+.shop-frame h2{font-weight:800;letter-spacing:-.025em;line-height:1.2}
+.shop-heading{margin-block:1rem;min-width:0}
+.shop-heading>p{margin-top:.35rem}
+.shop-heading>[data-inline-edit]{margin-top:.6rem;min-height:44px}
+.shop-filters{align-items:end;gap:.55rem;padding:.75rem;border:1px solid var(--border);border-radius:1rem;background:var(--store-card,#fff)}
+.shop-filters label,.shop-category-strip{font-weight:700}
+.shop-filters button{min-height:44px}
+.shop-category-strip{display:grid;gap:.35rem;width:100%;margin-block:.75rem;padding:.65rem .75rem;border:1px solid var(--border);border-radius:.85rem;background:var(--store-card,#fff)}
+.shop-category-strip select,.shop-filters select{width:100%;min-width:0;min-height:44px}
+@media(max-width:560px){
+ .shop-filters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+ .shop-filters label{grid-column:1/-1;min-width:0}
+ .shop-filters button{white-space:normal;justify-content:center}
+}
