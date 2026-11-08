@@ -66,6 +66,12 @@ body.workspace {background:#fff}
   color:#fff;
 }
 .workspace .admin-sections button:focus-visible {outline:2px solid #c3eaff;outline-offset:-3px}
+@media(max-width:760px){
+  .workspace .admin-sidebar {min-width:0;padding:12px}
+  .workspace .admin-sections {min-width:0;overscroll-behavior-x:contain;scroll-padding-inline:4px}
+  .workspace .admin-sections button {flex:0 0 auto;min-height:44px;padding-inline:12px}
+  .workspace input,.workspace select,.workspace textarea {font-size:16px;min-width:0}
+}
 </style><link rel="stylesheet" href="/shop.css"></head><body><header><nav id="nav"></nav></header><main id="app"></main><footer>eNuxes · Commerce & hospitality <span class="muted"> / Demo workspace</span></footer><dialog id="modal"></dialog><div id="toast" role="status"></div>
 <script>
 'use strict';
