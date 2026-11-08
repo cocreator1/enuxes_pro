@@ -101,6 +101,15 @@ function renderStoreRows() {
   target.innerHTML = rows.map(storeCard).join('') || '<div class="panel">No matching stores.</div>';
 }
 
+function revealWorkspaceTab() {
+  const strip = app.querySelector('.admin-sections');
+  const active = strip?.querySelector('.active');
+  if (!active || strip.scrollWidth <= strip.clientWidth) return;
+  const bounds = strip.getBoundingClientRect();
+  const tab = active.getBoundingClientRect();
+  strip.scrollLeft += tab.left - bounds.left - (strip.clientWidth - tab.width) / 2;
+}
+
 function dashboard() {
   const metrics = Object.entries(labels).map(([status,label]) =>
     '<button class="panel admin-metric" data-metric="' + status + '"><small>' + label + '</small><strong>'
@@ -138,6 +147,7 @@ function dashboard() {
           + Object.entries(labels).filter(([status]) => status !== 'deleted').map(([status,label]) => '<option value="' + status + '" ' + (storeStatus === status ? 'selected' : '') + '>' + label + '</option>').join('') + '</select></div>')
         + '<div class="stack" id="admin-store-rows"></div>')
     + '</section></div>';
+  revealWorkspaceTab();
   renderStoreRows();
 }
 
@@ -357,6 +367,7 @@ function ownerDashboard() {
   app.innerHTML = '<div class="admin-layout"><aside class="panel admin-sidebar">' + workspaceBrand + '<small>STORE OWNER</small>'
     + '<div class="admin-sections" aria-label="Store tools">' + tabs.map(tab => '<button data-owner-tab="' + tab + '" class="' + (tab===ownerTab?'active':'') + '">' + tab + '</button>').join('') + '</div></aside>'
     + '<section class="stack"><header class="row workspace-top"><div><small>' + esc(store.name) + '</small><h2>' + ownerTab + '</h2></div><div class="toolbar"><button data-owner-tab="Notifications">Notifications <span id="owner-alert-count"></span></button><button id="admin-signout">Sign out</button></div></header><div id="owner-content" class="stack"></div></section></div>';
+  revealWorkspaceTab();
   renderOwnerTab().catch(showOwnerError);
 }
 
