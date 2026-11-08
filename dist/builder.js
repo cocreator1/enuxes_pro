@@ -77,7 +77,7 @@ function profileForm(store,content){
       +field('Business name','name',store.name,100,'text',true)+field('Category','category',content.category,80)
       +'<label>Description<textarea name="description" maxlength="1000">'+esc(store.description)+'</textarea></label>'
       +field('Public email','email',content.email,254,'email')+field('Public phone','phone',content.phone,80,'tel')
-      +imageTag(content.logo,'Current business logo')+uploadField('logo')+'<div><button class="primary">Save Changes</button><button type="button" data-action="close" class="owner-sheet-cancel">Cancel</button></div><p role="status"></p></form>';
+      +imageTag(content.logo,'Current business logo')+uploadField('logo')+'<div class="owner-editor-actions"><button class="primary">Save Changes</button><button type="button" data-action="close" class="owner-sheet-cancel">Cancel</button></div><p role="status"></p></form>';
 }
 
 function productEditor(product={}){
@@ -230,7 +230,7 @@ document.addEventListener('submit',async event=>{
       if(form.closest('.inline-store-editor')){await reloadInlineStore();if(modal.contains(form))modal.close();return;}
       modal.close();ownerDashboard();toast('Product saved.');return;
     }
-    if(form.closest('.inline-store-editor')){await reloadInlineStore();return;}
+    if(form.closest('.inline-store-editor')){await reloadInlineStore();modal.close();return;}
     status.textContent='Saved.';
   }catch(error){status.textContent=error.message;if(form.closest('.inline-store-editor'))markOwnerEditor('Unsaved changes');}finally{button.disabled=false;}
 });
