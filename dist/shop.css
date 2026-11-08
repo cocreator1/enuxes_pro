@@ -113,16 +113,15 @@ dialog.owner-edit-sheet{position:fixed;inset:0 0 0 auto;margin:0;width:min(520px
 .shop-tabs-owner>a{display:grid;justify-items:center;align-content:center;gap:3px;min-height:50px;padding:4px;border-radius:10px;font-size:12px;font-weight:700}
 @media(max-width:360px){.shop-tabs-owner :is(a,button){font-size:11px;padding-inline:1px}}
 
+.owner-dashboard{padding-bottom:calc(5rem + env(safe-area-inset-bottom))}
+.owner-settings-nav>a[aria-current=page]{color:var(--shop-ink,#166047);background:var(--shop-tint,#dceee2)}
 @media(max-width:760px){
- .workspace .owner-dashboard{padding-bottom:calc(5rem + env(safe-area-inset-bottom))}
- .workspace .owner-dashboard .admin-sections{
-  position:fixed;inset:auto 0 0;z-index:8;display:flex;gap:.35rem;
-  padding:.4rem max(.5rem,env(safe-area-inset-right)) calc(.4rem + env(safe-area-inset-bottom)) max(.5rem,env(safe-area-inset-left));
-  background:#fff;border:1px solid var(--border);border-radius:16px 16px 0 0;
- }
- .workspace .owner-dashboard .admin-sections button{color:#172441;background:#f5f7fc;border-color:transparent}
- .workspace .owner-dashboard .admin-sections button.active{background:#dbedf8;color:#173b56}
- .workspace .owner-dashboard .admin-sections button:focus-visible{outline:2px solid #244ce0}
+ .workspace .owner-dashboard{grid-template-columns:clamp(82px,25vw,145px) minmax(0,1fr);gap:.55rem}
+ .workspace .owner-dashboard .admin-sidebar{position:sticky;top:.5rem;padding:.4rem;min-width:0;max-height:calc(100dvh - 6rem - env(safe-area-inset-bottom));overflow:auto}
+ .workspace .owner-dashboard .admin-sections{display:grid;gap:.3rem;overflow:visible}
+ .workspace .owner-dashboard .admin-sections button{white-space:normal;overflow-wrap:anywhere;text-align:left;padding:.4rem;font-size:.82rem}
+ .owner-dashboard>section,.owner-dashboard #owner-content{min-width:0}
+ .owner-settings-nav{inset:auto 0 0;transform:none;margin-inline:auto;width:100%}
  .shop-frame>.shop-tabs{position:fixed;inset:auto 0 0;transform:none;margin-inline:auto;width:100%}
  body:has(.shop-frame>.shop-tabs) footer{padding-bottom:calc(5rem + env(safe-area-inset-bottom))}
 }
