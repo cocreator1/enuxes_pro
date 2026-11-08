@@ -91,7 +91,7 @@ function productForm(product={},inPlace=false){
   return '<form id="owner-product" data-id="'+(product.id||'')+'">'+(inPlace?imagePicker:'')
     +field('Product name','name',product.name,100,'text',true)+field('Category','category',product.category,80,'text',true)
     +'<label>Description<textarea name="description" maxlength="1000">'+esc(product.description)+'</textarea></label>'
-    +'<label>Price (N$)<input name="price" type="number" min=".01" max="21474836.47" step=".01" required value="'+(product.price_minor==null?'':product.price_minor/100)+'"></label>'
+    +'<label>Price (N$)<input name="price" type="number" min="'+(product.price_minor===0?'0':'.01')+'" max="21474836.47" step=".01" required value="'+(product.price_minor==null?'':product.price_minor/100)+'"></label>'
     +'<label>Sale price (N$)<input name="sale" type="number" min=".01" max="21474836.47" step=".01" value="'+(product.sale_price_minor?product.sale_price_minor/100:'')+'"></label>'
     +field('Sizes (comma separated)','sizes',product.sizes?.join(', '),240)
     +field('Colours (comma separated)','colours',product.colours?.join(', '),240)
@@ -199,7 +199,9 @@ document.addEventListener('submit',async event=>{
   if(!['owner-profile','owner-product','owner-delete-product','admin-layout-limit'].includes(form.id))return;
   event.preventDefault();
   const button=form.querySelector('button:not([type=button])'),status=form.querySelector(':scope > [role=status]');
+  if(button.disabled)return;
   button.disabled=true;
+  status.textContent='Saving…';
   const data=new FormData(form);
   const value=key=>String(data.get(key)||'').trim();
   try{
