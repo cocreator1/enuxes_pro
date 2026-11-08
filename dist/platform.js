@@ -85,6 +85,7 @@ function storeCard(store) {
     + '<span class="badge">' + labels[store.lifecycle] + '</span></div>'
     + (store.lifecycle === 'active' ? '<a href="' + link + '">' + link + ' ↗</a>' : '<small>' + link + '</small>')
     + ownerLoginLink(store.slug)
+    + (['stores','owners'].includes(section) && store.lifecycle!=='deleted' ? '<div><button data-owner-password="'+esc(store.id)+'">Update owner password</button></div>' : '')
     + (store.status_reason ? '<small>' + esc(store.status_reason) + '</small>' : '')
     + '<div class="toolbar">' + buttons.map(([status,label]) =>
       '<button data-business-status="' + status + '" data-business-id="' + store.id + '">' + label + '</button>').join('')
@@ -204,12 +205,18 @@ function slugFrom(name) {
   return name.normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,50);
 }
 
+function addPasswordToggles(container) {
+  for(const input of container.querySelectorAll('input[type=password]')){
+    input.insertAdjacentHTML('afterend','<button type="button" data-password-visibility>Show password</button>');
+  }
+}
+
 function showCreate() {
   openDialog('Create store', '<form id="main-admin-create"><label>Internal link suggestion<input name="name" required maxlength="100"></label>'
     + '<label>Link name<input name="slug" required maxlength="50" pattern="[a-z0-9]+(?:-[a-z0-9]+)*"></label>'
     + '<small id="slug-preview">' + storefrontRoot + '/</small>'
     + '<label>Business category<select name="type">'+draftTypes.map(([name],i)=>'<option value="'+i+'">'+name+'</option>').join('')+'</select></label>'
-    + '<label>Approved artwork<select name="pack"></select></label><div id="draft-pack-preview"></div>'
+    + '<label>Approved artwork<select name="pack"></select></label><details class="create-pack-preview"><summary>Preview demo artwork</summary><div id="draft-pack-preview"></div></details>'
     + '<label>Package<select name="package"><option>Starter</option><option>Silver</option><option>Gold</option></select></label>'
     + '<label>Owner name<input name="ownerName" required maxlength="100"></label>'
     + '<label>Owner username<input name="username" required minlength="3" maxlength="32" pattern="[a-z0-9][a-z0-9_\\-]{2,31}" autocomplete="off"></label>'
@@ -217,6 +224,7 @@ function showCreate() {
     + '<p class="muted">Created privately as Store Name. The assigned owner can publish once ready.</p>'
     + '<p id="admin-form-error" role="alert" hidden></p><button class="primary">Create store</button></form>');
   const form = document.getElementById('main-admin-create');
+  addPasswordToggles(form);
   bindDraftPack(form);
   let customised = false;
   form.addEventListener('input', event => {
@@ -272,6 +280,24 @@ document.addEventListener('click', async event => {
     } catch { if (modal.open) openDialog('Advertising','<p>Advertising settings could not be loaded.</p>'); }
     return;
   }
+  if (target.hasAttribute('data-password-visibility')) {
+    const input=target.previousElementSibling;
+    const show=input.type==='password';
+    input.type=show?'text':'password';
+    target.textContent=show?'Hide password':'Show password';
+    return;
+  }
+  if (target.dataset.ownerPassword && !ownerSlug) {
+    const store=adminStores.find(item=>item.id===target.dataset.ownerPassword);
+    if(!store)return;
+    openDialog('Update owner password · '+store.name,
+      '<form id="main-admin-owner-password" data-id="'+esc(store.id)+'">'
+      +'<label>New owner password<input name="password" type="password" minlength="14" maxlength="72" autocomplete="new-password" required></label>'
+      +'<label>Confirm password<input name="confirm" type="password" minlength="14" maxlength="72" autocomplete="new-password" required></label>'
+      +'<p id="admin-form-error" role="alert" hidden></p><button class="primary" type="submit">Update password</button></form>');
+    addPasswordToggles(modal);
+    return;
+  }
   if (target.dataset.ownerLink) {
     const link = target.dataset.ownerLink;
     try {
@@ -304,7 +330,7 @@ document.addEventListener('click', async event => {
 
 document.addEventListener('submit', async event => {
   const form = event.target;
-  if (!['main-admin-login','main-admin-create','main-admin-status','main-admin-ad','main-admin-password'].includes(form.id)) return;
+  if (!['main-admin-login','main-admin-create','main-admin-status','main-admin-ad','main-admin-password','main-admin-owner-password'].includes(form.id)) return;
   event.preventDefault();
   const values = Object.fromEntries(new FormData(form));
   const button = form.querySelector('button[type=submit], button:not([type])');
@@ -337,6 +363,15 @@ document.addEventListener('submit', async event => {
       });
       modal.close();
       toast('Advertising settings saved.');
+      return;
+    } else if (form.id === 'main-admin-owner-password') {
+      if(values.password!==values.confirm)throw new Error('The passwords do not match.');
+      await request('/functions/v1/provision-store',{method:'POST',token:await getSessionToken(),data:{
+        action:'update-owner-password',storeId:form.dataset.id,password:values.password
+      }});
+      form.reset();
+      modal.close();
+      toast('Owner password updated.');
       return;
     } else if (form.id === 'main-admin-create') {
       await request('/functions/v1/provision-store',{method:'POST',token:await getSessionToken(),data:{
