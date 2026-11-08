@@ -33,16 +33,27 @@ function saveShop(){try{localStorage.setItem(cartKey(),JSON.stringify({cart:shop
 const shopItems=()=>db.products.filter(p=>p.active);
 function shopPicture(p){return p.image?imageTag(p.image,p.name):icon('bag','var(--shop-ink,#166047)');}
 function shopPrice(p){return '<strong>'+(business.demo_pack&&p.price_minor===0?'N$0-00':money(price(p)))+'</strong>'+(p.sale?'<del>'+money(p.price)+'</del>':'');}
-function shopCard(p){return '<article class="shop-card"><button class="shop-photo" data-item="'+p.id+'" aria-label="View '+esc(p.name)+'">'+shopPicture(p)+'</button>'
+function shopCard(p){
+ const badge={...visualSetting('price-default'),...visualSetting('price:'+p.id)};
+ return '<article class="shop-card"><div class="shop-card-media"><button class="shop-photo" data-item="'+p.id+'" aria-label="View '+esc(p.name)+'">'+shopPicture(p)+'</button>'
+ +'<span class="shop-price-slot"><span class="shop-price-badge" style="'+visualPaint(badge)+'">'+shopPrice(p)+'</span>'+visualDots('price:'+p.id,'price badge')+'</span></div>'
  +'<button class="shop-heart '+(shopFav.includes(p.id)?'liked':'')+'" data-fav="'+p.id+'" aria-label="Favourite '+esc(p.name)+'" aria-pressed="'+shopFav.includes(p.id)+'">'+shopIcon('heart')+'</button>'
- +inlineEditButton('photo',p.id,'+ Photos')+'<div class="shop-card-copy"><button data-item="'+p.id+'">'+esc(p.name)+'</button><div>'+(canEditInlineStore()?'<button data-item="'+p.id+'" aria-label="Edit price">'+shopPrice(p)+'</button>':shopPrice(p))+'</div>'+inlineEditButton('product',p.id,'Edit product')+'</div></article>';}
+ +inlineEditButton('photo',p.id,'+ Photos')+'<div class="shop-card-copy"><button data-item="'+p.id+'">'+esc(p.name)+'</button>'+inlineEditButton('product',p.id,'Edit product')+'</div></article>';
+}
 function searchBox(){return '<label class="shop-search">'+shopIcon('search')+'<input id="shop-search" type="search" placeholder="Search products" aria-label="Search products" value="'+esc(shopSearch)+'"></label>';}
 function filteredItems(){const rows=shopItems().filter(p=>(!shopStock||p.stock!==0)&&(!shopSize||p.sizes?.includes(shopSize))).filter(p=>(!shopFilter||p.category===shopFilter)&&(!shopOnlyFav||shopFav.includes(p.id))&&(!shopOnlySale||p.sale)&&[p.name,p.category,p.description].join(' ').toLowerCase().includes(shopSearch.toLowerCase()));
  return shopSort==='low'?rows.sort((a,b)=>shopUnit(a)-shopUnit(b)):shopSort==='high'?rows.sort((a,b)=>shopUnit(b)-shopUnit(a)):rows;
 }
 function updateShopGrid(){const grid=document.getElementById('shop-grid');if(grid)grid.innerHTML=filteredItems().map(shopCard).join('')||'<p>No matching products.</p>';}
 const collections=()=>[...new Set(shopItems().map(p=>p.category).filter(Boolean))];
-function shopNav(){return '<nav class="shop-tabs" aria-label="Store navigation">'+[['home','Home'],['shop','Shop'],['catalogue','Catalogue'],['cart','Cart']].map(([key,label])=>'<button data-shop-page="'+key+'" '+(shopPage===key?'aria-current="page"':'')+'>'+shopIcon(key)+'<span>'+label+(key==='cart'&&shopCart.length?' · '+shopCart.reduce((n,line)=>n+line.quantity,0):'')+'</span></button>').join('')+'</nav>';}
+function shopNav(){
+ const ownerSettings=canEditInlineStore();
+ const tabs=[['home','Home'],['shop','Shop'],['catalogue','Catalogue'],['cart','Cart']];
+ const settings=ownerSettings?'<a href="/'+encodeURIComponent(business.slug)+'/owner"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path stroke-linecap="round" d="M4 6h16M4 12h16M4 18h16"/><path stroke-linecap="round" stroke-width="4" d="M8 6h.01M16 12h.01M10 18h.01"/></svg><span>Settings</span></a>':'';
+ return '<nav class="shop-tabs'+(ownerSettings?' shop-tabs-owner':'')+'" aria-label="Store navigation">'
+  +tabs.map(([key,label])=>visualButton('nav:'+key,label+(key==='cart'&&shopCart.length?' · '+shopCart.reduce((n,line)=>n+line.quantity,0):''),key,shopIcon(key))).join('')
+  +settings+'</nav>';
+}
 function shopPills(){return '<div class="shop-pills">'+[['','All'],...collections().map(c=>[c,c])].map(([id,label])=>'<button data-collection="'+esc(id)+'" aria-pressed="'+(shopFilter===id&&!shopOnlySale)+'">'+esc(label)+'</button>').join('')+'</div>';}
 function renderShop(){
  const homeConfig=currentHomeSettings();
@@ -59,9 +70,9 @@ function renderShop(){
    +'<button id="shop-follow" aria-pressed="'+Boolean(shopInfo.following)+'">'+shopIcon('people')+' '+(shopInfo.following?'Following':'Follow')+(Number.isFinite(Number(shopInfo.followers))?' · '+Number(shopInfo.followers).toLocaleString()+' followers':'')+'</button>'
    +([profile.category,profile.email,profile.phone].some(Boolean)?'<p class="muted">'+[profile.category,profile.email,profile.phone].filter(Boolean).map(esc).join(' · ')+'</p>':'')+inlineEditButton('profile','','Edit profile')+'</section>'
    +'<div data-home-section="slideshow">'+saleBanner+bannerHtml()+inlineEditButton('sections','','Edit slideshow and sections')+'</div>'
-   +'<div data-home-section="search">'+searchBox()+'</div><div data-home-section="categories">'+shopPills()+'</div><section data-home-section="featured"><div id="browse" class="row shop-heading"><h2>Featured</h2><button data-shop-page="shop">See all</button></div><div class="shop-grid" id="products">'+(featured.map(shopCard).join('')||'<p>No products yet.</p>')+'</div></section>';
+   +'<div data-home-section="search">'+searchBox()+'</div><div data-home-section="categories">'+shopPills()+'</div><section data-home-section="featured"><div id="browse" class="row shop-heading">'+visualHeading('heading:featured','Featured')+visualButton('button:shop','See all','shop')+'</div><div class="shop-grid" id="products">'+(featured.map(shopCard).join('')||'<p>No products yet.</p>')+'</div></section>';
  }else if(shopPage==='shop'){
-  body='<div class="shop-heading"><h2>Shop all products</h2><p class="muted">Browse the collection</p></div>'+searchBox()
+  body='<div class="shop-heading">'+visualHeading('heading:shop','Shop all products')+'<p class="muted">Browse the collection</p></div>'+searchBox()
    +'<div class="shop-filters"><label>Category<select id="shop-category"><option value="">All products</option>'+collections().map(c=>'<option value="'+esc(c)+'" '+(shopFilter===c?'selected':'')+'>'+esc(c)+'</option>').join('')+'</select></label>'
    +'<label>Sort<select id="shop-sort"><option value="">Default</option><option value="low" '+(shopSort==='low'?'selected':'')+'>Price low to high</option><option value="high" '+(shopSort==='high'?'selected':'')+'>Price high to low</option></select></label>'
    +'<button data-shop-filter="fav" aria-pressed="'+shopOnlyFav+'">'+shopIcon('heart')+' Favourites</button><button data-shop-filter="sale" aria-pressed="'+shopOnlySale+'">Sale</button><button data-shop-filter="stock" aria-pressed="'+shopStock+'">In stock</button><button data-shop-filter="clear">Clear filters</button></div>'+shopPills()+'<div class="shop-grid" id="shop-grid"></div>';
@@ -74,10 +85,11 @@ function renderShop(){
     const cover=configured.find(c=>c.name===name)?.cover;
     return [name,safeImage(cover)||(isTrendora()&&trendoraCover[name]?trendoraAsset(trendoraCover[name]):items.find(p=>p.category===name&&p.image)?.image)];
   });
-  body='<div class="shop-heading"><h2>Catalogue</h2><p class="muted">Browse our collections</p></div><div class="shop-collections">'
+  body='<div class="shop-heading">'+visualHeading('heading:catalogue','Catalogue')+'<p class="muted">Browse our collections</p></div><div class="shop-collections">'
    +(groups.map(([name,cover])=>'<button class="shop-collection" '+(name==='Sale'?'data-shop-sale':'data-collection="'+esc(name)+'"')+'>'+(cover?imageTag(cover):'')+'<strong>'+esc(name)+'</strong><span aria-hidden="true">›</span></button>').join('')||'<p>No collections yet.</p>')+'</div>';
  }
  app.innerHTML='<div class="shop-frame">'+ownerStoreToolbar()+'<div class="shop-content">'+body+'</div>'+shopNav()+'</div>';
+ if(canEditInlineStore())app.querySelector('.shop-content').insertAdjacentHTML('afterbegin','<div class="visual-store-price"><span>Price Badge Colour</span>'+visualDots('price-default','store-wide price badge colour')+'</div>');
  if(shopPage==='shop')updateShopGrid();
  if(canEditInlineStore()&&shopPage==='shop')app.querySelector('.shop-heading').insertAdjacentHTML('beforeend',inlineEditButton('product','','Add product'));
  if(shopPage==='home')renderPublishedLayout(homeConfig);
