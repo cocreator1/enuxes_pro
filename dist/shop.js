@@ -32,7 +32,7 @@ function loadSaved(key,fallback){try{return JSON.parse(localStorage.getItem(key)
 function saveShop(){try{localStorage.setItem(cartKey(),JSON.stringify({cart:shopCart,fav:shopFav,request:shopRequest}));}catch{}}
 const shopItems=()=>db.products.filter(p=>p.active);
 function shopPicture(p){return p.image?imageTag(p.image,p.name):icon('bag','var(--shop-ink,#166047)');}
-function shopPrice(p){return '<strong>'+money(price(p))+'</strong>'+(p.sale?'<del>'+money(p.price)+'</del>':'');}
+function shopPrice(p){return '<strong>'+(business.demo_pack&&p.price_minor===0?'N$0-00':money(price(p)))+'</strong>'+(p.sale?'<del>'+money(p.price)+'</del>':'');}
 function shopCard(p){return '<article class="shop-card"><button class="shop-photo" data-item="'+p.id+'" aria-label="View '+esc(p.name)+'">'+shopPicture(p)+'</button>'
  +'<button class="shop-heart '+(shopFav.includes(p.id)?'liked':'')+'" data-fav="'+p.id+'" aria-label="Favourite '+esc(p.name)+'" aria-pressed="'+shopFav.includes(p.id)+'">'+shopIcon('heart')+'</button>'
  +'<div class="shop-card-copy"><button data-item="'+p.id+'">'+esc(p.name)+'</button><div>'+shopPrice(p)+'</div></div></article>';}
@@ -45,6 +45,8 @@ const collections=()=>[...new Set(shopItems().map(p=>p.category).filter(Boolean)
 function shopNav(){return '<nav class="shop-tabs" aria-label="Store navigation">'+[['home','Home'],['shop','Shop'],['catalogue','Catalogue'],['cart','Cart']].map(([key,label])=>'<button data-shop-page="'+key+'" '+(shopPage===key?'aria-current="page"':'')+'>'+shopIcon(key)+'<span>'+label+(key==='cart'&&shopCart.length?' · '+shopCart.reduce((n,line)=>n+line.quantity,0):'')+'</span></button>').join('')+'</nav>';}
 function shopPills(){return '<div class="shop-pills">'+[['','All'],...collections().map(c=>[c,c])].map(([id,label])=>'<button data-collection="'+esc(id)+'" aria-pressed="'+(shopFilter===id&&!shopOnlySale)+'">'+esc(label)+'</button>').join('')+'</div>';}
 function renderShop(){
+ const homeConfig=currentHomeSettings();
+ applyHomeColours(homeConfig);
  const items=shopItems(), profile=publishedContent||{}, merch=isTrendora()?(profile.merchandising||{}):{};
  let body='';
  if(shopPage==='home'){
@@ -52,12 +54,12 @@ function renderShop(){
   const saleBanner=merch.bannerEnabled===false?'':items.some(p=>p.sale)?'<div class="shop-sale-wrap">'+(safeImage(merch.bannerImage)?imageTag(merch.bannerImage,''):'')
    +(safeImage(merch.bannerLink)?'<a class="shop-sale" href="'+esc(merch.bannerLink)+'">':'<button class="shop-sale" data-shop-sale>')
    +'<strong>'+esc(merch.bannerTitle||(isTrendora()?'Mid-season sale':'Store sale'))+'</strong><span>Browse discounted products →</span>'+(safeImage(merch.bannerLink)?'</a>':'</button>')+'</div>':'';
-  body='<section class="shop-profile">'+(imageTag(profile.logo,business.name)||'<div class="shop-avatar">'+esc(business.name.slice(0,1).toUpperCase())+'</div>')
+  body='<section data-home-section="profile" class="shop-profile">'+(imageTag(profile.logo,business.name)||'<div class="shop-avatar">'+esc(business.name.slice(0,1).toUpperCase())+'</div>')
    +'<h1>'+esc(business.name)+'</h1><small>on eNuxes</small><p>'+esc(business.description)+'</p>'
    +'<button id="shop-follow" aria-pressed="'+Boolean(shopInfo.following)+'">'+shopIcon('people')+' '+(shopInfo.following?'Following':'Follow')+(Number.isFinite(Number(shopInfo.followers))?' · '+Number(shopInfo.followers).toLocaleString()+' followers':'')+'</button>'
    +([profile.category,profile.email,profile.phone].some(Boolean)?'<p class="muted">'+[profile.category,profile.email,profile.phone].filter(Boolean).map(esc).join(' · ')+'</p>':'')+'</section>'
-   +saleBanner
-   +bannerHtml()+searchBox()+shopPills()+'<div id="browse" class="row shop-heading"><h2>Featured</h2><button data-shop-page="shop">See all</button></div><div class="shop-grid" id="products">'+(featured.map(shopCard).join('')||'<p>No products yet.</p>')+'</div>';
+   +'<div data-home-section="slideshow">'+saleBanner+bannerHtml()+'</div>'
+   +'<div data-home-section="search">'+searchBox()+'</div><div data-home-section="categories">'+shopPills()+'</div><section data-home-section="featured"><div id="browse" class="row shop-heading"><h2>Featured</h2><button data-shop-page="shop">See all</button></div><div class="shop-grid" id="products">'+(featured.map(shopCard).join('')||'<p>No products yet.</p>')+'</div></section>';
  }else if(shopPage==='shop'){
   body='<div class="shop-heading"><h2>Shop all products</h2><p class="muted">Browse the collection</p></div>'+searchBox()
    +'<div class="shop-filters"><label>Category<select id="shop-category"><option value="">All products</option>'+collections().map(c=>'<option value="'+esc(c)+'" '+(shopFilter===c?'selected':'')+'>'+esc(c)+'</option>').join('')+'</select></label>'
@@ -75,9 +77,9 @@ function renderShop(){
   body='<div class="shop-heading"><h2>Catalogue</h2><p class="muted">Browse our collections</p></div><div class="shop-collections">'
    +(groups.map(([name,cover])=>'<button class="shop-collection" '+(name==='Sale'?'data-shop-sale':'data-collection="'+esc(name)+'"')+'>'+(cover?imageTag(cover):'')+'<strong>'+esc(name)+'</strong><span aria-hidden="true">›</span></button>').join('')||'<p>No collections yet.</p>')+'</div>';
  }
- app.innerHTML='<div class="shop-frame"><div class="shop-content">'+body+'</div>'+shopNav()+'</div>';
+ app.innerHTML='<div class="shop-frame">'+(storefrontPreview?'<p class="store-preview-notice">Private owner preview · Ordering is disabled.</p>':'')+'<div class="shop-content">'+body+'</div>'+shopNav()+'</div>';
  if(shopPage==='shop')updateShopGrid();
- if(shopPage==='home')renderPublishedLayout();
+ if(shopPage==='home')renderPublishedLayout(homeConfig);
 }
 
 function detail(id){
@@ -89,7 +91,7 @@ function detail(id){
   +'<form id="shop-item" data-id="'+p.id+'"><div class="row"><h2>'+esc(p.name)+'</h2><button type="button" data-fav="'+p.id+'" aria-label="Favourite" aria-pressed="'+shopFav.includes(p.id)+'">'+shopIcon('heart')+'</button></div><div class="shop-detail-price">'+shopPrice(p)+'</div>'
   +options('Colour',p.colours)+options('Size',p.sizes)
   +'<label>Quantity <div class="shop-step"><button type="button" data-detail-step="-1" aria-label="Decrease quantity">−</button><input name="quantity" type="number" min="1" max="'+Math.min(99,p.stock??99)+'" value="1" aria-label="Quantity" required><button type="button" data-detail-step="1" aria-label="Increase quantity">+</button></div></label>'
-  +'<p>'+esc(p.description)+'</p>'+(p.stock===0?'<p>Out of stock</p>':'<div class="shop-cta"><button value="add">Add to Cart</button><button class="primary" value="buy">Buy Now</button></div>')+'</form>');
+  +'<p>'+esc(p.description)+'</p>'+(storefrontPreview?'<p>Ordering is disabled in preview.</p>':p.stock===0?'<p>Out of stock</p>':'<div class="shop-cta"><button value="add">Add to Cart</button><button class="primary" value="buy">Buy Now</button></div>')+'</form>');
 }
 
 function showCart(){
@@ -118,9 +120,9 @@ async function startShop(){
  shopDevice=loadSaved('enuxes-shop-device',null)||crypto.randomUUID();
  try{localStorage.setItem('enuxes-shop-device',JSON.stringify(shopDevice));}catch{}
  renderShop();
- await loadShopInfo().catch(()=>{});
+ if(!storefrontPreview)await loadShopInfo().catch(()=>{});
  if(shopPage==='home'&&!modal.open)renderShop();
- if(isTrendora())startTrendoraRefresh();
+ startTrendoraRefresh();
 }
 
 
@@ -137,7 +139,7 @@ async function refreshTrendora(){
  trendoraRefreshing=true;
  try{
   const [snapshot,info]=await Promise.all([readStorefront(business.slug),
-    request('/rest/v1/rpc/shop_info',{method:'POST',data:{p_business:business.id,p_device:shopDevice,p_follow:null}})]);
+    storefrontPreview?Promise.resolve([]):request('/rest/v1/rpc/shop_info',{method:'POST',data:{p_business:business.id,p_device:shopDevice,p_follow:null}})]);
   if(modal.open||checkoutInFlight||document.activeElement?.matches('input,select,textarea'))return;
   if(!snapshot){app.innerHTML='<h2>Store unavailable</h2><a href="/">Browse businesses</a>';return;}
   const changed=JSON.stringify(snapshot)!==storefrontVersion;
@@ -177,7 +179,7 @@ document.addEventListener('click',async event=>{
  if(!document.body.classList.contains('customer-shop'))return;
  const button=event.target.closest('button');if(!button)return;
  const d=button.dataset;
- if(d.shopPage){if(d.shopPage==='cart')return showCart();shopSearch=shopFilter='';shopOnlySale=shopOnlyFav=false;return changeShop(d.shopPage);}
+ if(d.shopPage){if(d.shopPage==='cart')return storefrontPreview?openDialog('Cart preview','<p>Orders are disabled in this preview.</p>'):showCart();shopSearch=shopFilter='';shopOnlySale=shopOnlyFav=false;return changeShop(d.shopPage);}
  if(d.item)return detail(d.item);
  if(d.detailPhoto&&safeImage(d.detailPhoto)){const image=modal.querySelector('.shop-detail-photo img');if(image)image.src=d.detailPhoto;return;}
  if(d.fav){
@@ -187,6 +189,7 @@ document.addEventListener('click',async event=>{
  if(d.collection!==undefined||d.shopSale!==undefined){shopFilter=d.collection||'';shopOnlySale=d.shopSale!==undefined;shopOnlyFav=false;shopSearch='';return changeShop('shop');}
  if(d.shopFilter){if(d.shopFilter==='fav')shopOnlyFav=!shopOnlyFav;else if(d.shopFilter==='sale')shopOnlySale=!shopOnlySale;else if(d.shopFilter==='stock')shopStock=!shopStock;else{shopOnlySale=shopOnlyFav=shopStock=false;shopFilter=shopSearch=shopSort=shopSize='';}return renderShop();}
  if(button.id==='shop-follow'){
+  if(storefrontPreview)return toast('Following is disabled in preview.');
   button.disabled=true;try{await loadShopInfo(!shopInfo.following);renderShop();}catch{toast('Could not update follow status.');button.disabled=false;}return;
  }
  if(d.detailStep){const input=button.form.elements.quantity;input.value=Math.max(1,Math.min(Number(input.max),Number(input.value)+Number(d.detailStep)));return;}
@@ -212,7 +215,7 @@ document.addEventListener('input',event=>{
 document.addEventListener('change',event=>{if(event.target.id==='shop-category'){shopFilter=event.target.value;updateShopGrid();}if(event.target.id==='shop-sort'){shopSort=event.target.value;updateShopGrid();}});
 document.addEventListener('submit',async event=>{
  const form=event.target;if(!['shop-item','shop-order'].includes(form.id))return;
- event.preventDefault();const fields=new FormData(form);
+ event.preventDefault();if(storefrontPreview)return;const fields=new FormData(form);
  if(form.id==='shop-item'){
   const p=getProduct(form.dataset.id);if(!p)return;
   try{

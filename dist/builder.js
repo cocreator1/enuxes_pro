@@ -43,14 +43,25 @@ async function ownerEditor(tab,target,token) {
   }
   if(tab==='Products'){
     const rows=await request('/rest/v1/products?select=id,name,category,description,price_minor,sale_price_minor,image_url,gallery,sizes,colours,stock,active&business_id=eq.'+ownerStore.id+'&order=name',{token});
+    if(!target.isConnected)return;
     target.innerHTML='<section class="panel stack"><div class="row"><h2>Products</h2><button id="owner-add-product">Add product</button></div>'
-      +(rows.map((row,i)=>'<div class="row line"><span>'+esc(row.name)+'</span><button data-product-edit="'+i+'">Edit</button></div>').join('')||'<p>No products yet.</p>')+'</section>';
+      +(rows.map((row,i)=>'<div class="row line"><span>'+esc(row.name)+' · '+(ownerStore.demo_pack&&row.price_minor===0?'N$0-00':money(row.price_minor/100))+'</span><div class="toolbar"><button data-product-edit="'+i+'">Edit</button>'
+      +(ownerStore.demo_pack?'<button data-product-delete="'+i+'">Delete</button>':'')+'</div></div>').join('')||'<p>No products yet.</p>')+'</section>';
     target.addEventListener('click',event=>{
       const button=event.target.closest('button');
       if(!button) return;
       if(button.id==='owner-add-product') productEditor();
       if(button.dataset.productEdit!==undefined) productEditor(rows[Number(button.dataset.productEdit)]);
+      if(button.dataset.productDelete!==undefined){
+        const row=rows[Number(button.dataset.productDelete)];
+        openDialog('Delete '+row.name,'<form id="owner-delete-product" data-id="'+row.id+'"><p>Remove this item from your store?</p><button class="primary">Delete product</button><p role="status"></p></form>');
+      }
     });
+    if(draftProductToEdit){
+      const selected=rows.find(row=>row.id===draftProductToEdit);
+      draftProductToEdit=null;
+      if(selected)productEditor(selected);
+    }
     return;
   }
   const content=await contentFor(ownerStore.id,token);
@@ -69,7 +80,7 @@ function productEditor(product={}){
   openDialog(product.id?'Edit product':'Add product','<form id="owner-product" data-id="'+(product.id||'')+'">'
     +field('Product name','name',product.name,100,'text',true)+field('Category','category',product.category,80,'text',true)
     +'<label>Description<textarea name="description" maxlength="1000">'+esc(product.description)+'</textarea></label>'
-    +'<label>Price (N$)<input name="price" type="number" min=".01" max="21474836.47" step=".01" required value="'+(product.price_minor?product.price_minor/100:'')+'"></label>'
+    +'<label>Price (N$)<input name="price" type="number" min=".01" max="21474836.47" step=".01" required value="'+(product.price_minor==null?'':product.price_minor/100)+'"></label>'
     +'<label>Sale price (N$)<input name="sale" type="number" min=".01" max="21474836.47" step=".01" value="'+(product.sale_price_minor?product.sale_price_minor/100:'')+'"></label>'
     +field('Sizes (comma separated)','sizes',product.sizes?.join(', '),240)
     +field('Colours (comma separated)','colours',product.colours?.join(', '),240)
@@ -98,15 +109,30 @@ function layoutEditor(target,content){
     +'<div class="toolbar"><button data-move="-1" aria-label="Move section up" '+(!i?'disabled':'')+'>↑</button><button data-move="1" aria-label="Move section down" '+(i===blocks.length-1?'disabled':'')+'>↓</button>'
     +(block.kind==='catalogue'?'':'<button data-remove-block>Remove</button>')+'</div></div>'
     +(block.kind==='text'?'<textarea aria-label="Paragraph" data-block-text maxlength="1800">'+esc(block.text)+'</textarea>':'')
-    +(['image','slideshow'].includes(block.kind)?'<div class="builder-photos">'+(block.images||[]).map((url,n)=>'<div>'+imageTag(url,'Section image '+(n+1))+'<button data-remove-photo="'+n+'" aria-label="Remove image '+(n+1)+'">×</button></div>').join('')+'</div>'+uploadField('layout-media',block.kind==='slideshow'):'')+'</article>').join(''); };
+    +(block.kind==='slideshow'?'<label>Slide interval<select data-slide-interval><option value="3" '+(block.interval!==5?'selected':'')+'>3 seconds</option><option value="5" '+(block.interval===5?'selected':'')+'>5 seconds</option></select></label>':'')
+    +(['image','slideshow'].includes(block.kind)?'<div class="builder-photos">'+(block.images||[]).map((url,n)=>'<div>'+imageTag(url,'Section image '+(n+1))+(block.kind==='slideshow'?'<label>Slide link (optional)<input data-slide-link="'+n+'" type="url" value="'+esc(block.links?.[n]||'')+'" placeholder="https://"></label>':'')+'<button data-remove-photo="'+n+'" aria-label="Remove image '+(n+1)+'">×</button></div>').join('')+'</div>'+uploadField('layout-media',block.kind==='slideshow'):'')+'</article>').join(''); };
   const move=(from,to)=>{if(from===to||!blocks[from]||!blocks[to]) return;blocks.splice(to,0,blocks.splice(from,1)[0]);dirty();render();};
   let dragged=-1;
   list.addEventListener('dragstart',event=>{const row=event.target.closest('[data-block]');if(row){dragged=Number(row.dataset.block);event.dataTransfer.setData('text/plain',String(dragged));}});
   list.addEventListener('dragend',()=>{dragged=-1;});
   list.addEventListener('dragover',event=>{if(dragged>=0)event.preventDefault();});
   list.addEventListener('drop',event=>{const row=event.target.closest('[data-block]');if(dragged>=0&&row){event.preventDefault();move(dragged,Number(row.dataset.block));dragged=-1;}});
-  list.addEventListener('input',event=>{if(event.target.matches('[data-block-text]')){blocks[Number(event.target.closest('[data-block]').dataset.block)].text=event.target.value;dirty();}});
+  list.addEventListener('input',event=>{
+    const field=event.target;
+    if(!field.matches('[data-block-text],[data-slide-link]'))return;
+    const block=blocks[Number(field.closest('[data-block]').dataset.block)];
+    if(field.matches('[data-block-text]'))block.text=field.value;
+    else{
+      block.links??=[];
+      block.links[Number(field.dataset.slideLink)]=field.value.trim();
+    }
+    dirty();
+  });
   list.addEventListener('change',async event=>{
+    if(event.target.matches('[data-slide-interval]')){
+      blocks[Number(event.target.closest('[data-block]').dataset.block)].interval=Number(event.target.value);
+      dirty();return;
+    }
     if(event.target.name!=='layout-media')return;
     const block=blocks[Number(event.target.closest('[data-block]').dataset.block)];
     uploads++;sync();
@@ -132,7 +158,7 @@ function layoutEditor(target,content){
       blocks.push({kind});dirty();render();list.lastElementChild?.scrollIntoView({block:'nearest'});
     } else if(button.dataset.move) move(index,index+Number(button.dataset.move));
     else if(button.hasAttribute('data-remove-block')){blocks.splice(index,1);dirty();render();}
-    else if(button.dataset.removePhoto!==undefined){blocks[index].images.splice(Number(button.dataset.removePhoto),1);dirty();render();}
+    else if(button.dataset.removePhoto!==undefined){blocks[index].images.splice(Number(button.dataset.removePhoto),1);blocks[index].links?.splice(Number(button.dataset.removePhoto),1);dirty();render();}
     else if(button.hasAttribute('data-preview-layout')){
       openDialog('Draft preview · '+store.name,'<p class="muted">These changes are visible only to you until published.</p><div id="builder-preview"></div>');
       const preview=modal.querySelector('#builder-preview');
@@ -141,6 +167,7 @@ function layoutEditor(target,content){
       appendPublishedBlocks(preview,catalogue,blocks);
     }else if(button.hasAttribute('data-save-layout')){
       if(saving||uploads)return;
+      if(blocks.some(block=>block.links?.some(link=>link&&!safeImage(link))))return note('Slide links must use HTTPS.',true);
       const version=revision, snapshot=structuredClone(blocks);
       saving=true;sync();note('Publishing layout…');
       try{
@@ -157,7 +184,7 @@ function layoutEditor(target,content){
 
 document.addEventListener('submit',async event=>{
   const form=event.target;
-  if(!['owner-profile','owner-product','admin-layout-limit'].includes(form.id))return;
+  if(!['owner-profile','owner-product','owner-delete-product','admin-layout-limit'].includes(form.id))return;
   event.preventDefault();
   const button=form.querySelector('button'),status=form.querySelector('[role=status]');
   button.disabled=true;
@@ -165,6 +192,11 @@ document.addEventListener('submit',async event=>{
   const value=key=>String(data.get(key)||'').trim();
   try{
     const token=await getSessionToken();
+    if(form.id==='owner-delete-product'){
+      const removed=await request('/rest/v1/products?id=eq.'+form.dataset.id+'&business_id=eq.'+ownerStore.id,{method:'DELETE',token,prefer:'return=representation'});
+      if(removed?.length!==1)throw new Error('The product could not be removed.');
+      modal.close();ownerDashboard();toast('Product deleted.');return;
+    }
     if(form.id==='admin-layout-limit'){
       await updateContent(form.dataset.id,{slideshow_limit:Number(value('limit'))},token);
     }else if(form.id==='owner-profile'){
@@ -198,10 +230,16 @@ async function openLayoutLimit(id){
   }catch{if(modal.open)openDialog('Slideshow limit','<p>Could not load the limit.</p>');}
 }
 
-function renderPublishedLayout(){
+function renderPublishedLayout(homeConfig){
   if(!publishedContent)return;
   const shopHome=app.querySelector('.shop-content');
   if(shopHome){
+    if(homeConfig?.order||business.demo_pack){
+      const slides=shopHome.querySelector('[data-home-section=slideshow]');
+      appendPublishedBlocks(slides,document.createDocumentFragment(),(publishedContent.blocks||[]).filter(block=>block.kind!=='catalogue'));
+      arrangeShopHome(shopHome,homeConfig);
+      return;
+    }
     const catalogue=shopHome.querySelector('#products');
     const heading=shopHome.querySelector('#browse');
     if(!catalogue||!heading)return;
@@ -228,8 +266,41 @@ function appendPublishedBlocks(target,catalogue,blocks){
     if(block.kind==='catalogue') target.append(catalogue);
     else if(block.kind==='text'&&block.text) target.insertAdjacentHTML('beforeend','<section class="panel store-copy">'+esc(block.text)+'</section>');
     else if(['image','slideshow'].includes(block.kind) && Array.isArray(block.images)){
-      const images=block.images.map((url,i)=>imageTag(url,'Store image '+(i+1))).join('');
-      if(images)target.insertAdjacentHTML('beforeend','<section tabindex="0" aria-label="'+(block.kind==='slideshow'?'Swipe through store photos':'Store photo')+'" class="panel store-media '+(block.kind==='slideshow'?'store-slides':'')+'">'+images+'</section>');
+      const images=block.images.map((url,i)=>{
+        const image=imageTag(url,'Store image '+(i+1)),link=safeImage(block.links?.[i]);
+        return image&&block.kind==='slideshow'&&link?'<a href="'+esc(link)+'" target="_blank" rel="noopener noreferrer">'+image+'</a>':image;
+      }).join('');
+      if(!images)continue;
+      if(block.kind==='image'){
+        target.insertAdjacentHTML('beforeend','<section class="panel store-media" aria-label="Store photo">'+images+'</section>');continue;
+      }
+      const container=document.createElement('section');container.className='panel store-carousel';
+      container.setAttribute('aria-label','Store slideshow');
+      container.innerHTML='<div class="store-media store-slides" tabindex="0">'+images+'</div>';
+      target.append(container);
+      const rail=container.firstElementChild, slides=[...rail.children];
+      if(slides.length<2)continue;
+      const controls=document.createElement('div');controls.className='toolbar';
+      controls.innerHTML='<button type="button" aria-label="Previous slide">←</button><button type="button">Pause</button><button type="button" aria-label="Next slide">→</button>';
+      container.append(controls);
+      const [previous,pause,next]=controls.children;
+      let paused=matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const reflect=()=>{pause.textContent=paused?'Play':'Pause';};
+      const move=step=>{
+        const index=slides.reduce((closest,slide,i)=>Math.abs(slide.offsetLeft-rail.scrollLeft)<Math.abs(slides[closest].offsetLeft-rail.scrollLeft)?i:closest,0);
+        rail.scrollTo({left:slides[(index+step+slides.length)%slides.length].offsetLeft,behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});
+      };
+      previous.onclick=()=>{paused=true;reflect();move(-1);};
+      next.onclick=()=>{paused=true;reflect();move(1);};
+      pause.onclick=()=>{paused=!paused;reflect();};
+      rail.addEventListener('pointerdown',()=>{paused=true;reflect();});
+      reflect();
+      const tick=()=>{
+        if(!container.isConnected)return;
+        if(!paused&&!document.hidden&&!container.matches(':hover')&&!rail.matches(':focus-within'))move(1);
+        setTimeout(tick,(block.interval===5?5:3)*1000);
+      };
+      setTimeout(tick,(block.interval===5?5:3)*1000);
     }
   }
 }

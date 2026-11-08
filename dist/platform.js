@@ -5,14 +5,15 @@ const adminPath = '/mainadmin-pro';
 const adminEmail = 'enuxespro@enuxes.com';
 const storefrontRoot = 'https://www.enuxes.com';
 const ownerSlug = location.pathname.match(/^\/([a-z0-9]+(?:-[a-z0-9]+)*)\/owner\/?$/)?.[1];
-const sessionKey = ownerSlug ? 'enuxes-owner-session' : 'enuxes-mainadmin-session';
+const storefrontPreview=new URLSearchParams(location.search).get('owner-preview')==='1';
+const sessionKey = ownerSlug || storefrontPreview ? 'enuxes-owner-session' : 'enuxes-mainadmin-session';
 let adminSession;
 let adminStores = [];
 let section = 'overview';
 let storeQuery = '';
 let storeStatus = '';
 const sections = {overview:'Overview',marketplace:'Marketplace',stores:'Stores',owners:'Owner access',billing:'Billing',analytics:'Analytics',ads:'Ads',support:'Support',security:'Security',archive:'Archive'};
-const businessColumns = 'id,slug,name,type,description,active';
+const businessColumns = 'id,slug,name,type,description,active,demo_pack,owner_published_at';
 
 async function request(endpoint, { method = 'GET', data, token, prefer } = {}) {
   const headers = { apikey: publicKey };
@@ -198,18 +199,19 @@ function slugFrom(name) {
 }
 
 function showCreate() {
-  openDialog('Create store', '<form id="main-admin-create"><label>Store name<input name="name" required maxlength="100"></label>'
+  openDialog('Create store', '<form id="main-admin-create"><label>Internal link suggestion<input name="name" required maxlength="100"></label>'
     + '<label>Link name<input name="slug" required maxlength="50" pattern="[a-z0-9]+(?:-[a-z0-9]+)*"></label>'
     + '<small id="slug-preview">' + storefrontRoot + '/</small>'
-    + '<label>Business type<select name="type">' + ['ONLINE_STORE', ...types.filter(t=>t!=='ONLINE_STORE')].map(t=>'<option value="'+t+'">'+t.replaceAll('_',' ')+'</option>').join('') + '</select></label>'
+    + '<label>Business category<select name="type">'+draftTypes.map(([name],i)=>'<option value="'+i+'">'+name+'</option>').join('')+'</select></label>'
+    + '<label>Approved artwork<select name="pack"></select></label><div id="draft-pack-preview"></div>'
     + '<label>Package<select name="package"><option>Starter</option><option>Silver</option><option>Gold</option></select></label>'
-    + '<label>Description<input name="description" maxlength="300"></label>'
     + '<label>Owner name<input name="ownerName" required maxlength="100"></label>'
     + '<label>Owner username<input name="username" required minlength="3" maxlength="32" pattern="[a-z0-9][a-z0-9_\\-]{2,31}" autocomplete="off"></label>'
     + '<label>Initial owner password<input name="ownerPassword" type="password" required minlength="14" maxlength="72" autocomplete="new-password"></label>'
-    + '<label><span><input type="checkbox" name="active"> Activate immediately</span></label>'
+    + '<p class="muted">Created privately as Store Name. The assigned owner can publish once ready.</p>'
     + '<p id="admin-form-error" role="alert" hidden></p><button class="primary">Create store</button></form>');
   const form = document.getElementById('main-admin-create');
+  bindDraftPack(form);
   let customised = false;
   form.addEventListener('input', event => {
     if (event.target.name === 'slug') customised = Boolean(form.elements.slug.value);
@@ -332,7 +334,7 @@ document.addEventListener('submit', async event => {
       return;
     } else if (form.id === 'main-admin-create') {
       await request('/functions/v1/provision-store',{method:'POST',token:await getSessionToken(),data:{
-        slug:values.slug,name:values.name,type:values.type,plan:values.package,description:values.description.trim(),active:Boolean(values.active),
+        slug:values.slug,type:draftTypes[Number(values.type)][1],plan:values.package,pack:values.pack,
         ownerName:values.ownerName,username:values.username,password:values.ownerPassword
       }});
       section = 'stores';
@@ -367,7 +369,7 @@ const workspaceBrand = '<a class="workspace-brand" href="/"><img src="/enuxes-lo
 
 function ownerDashboard() {
   const store = ownerStore;
-  const tabs = ['My Store','Orders','Inventory','Products','Store builder',...(store.slug==='trendora'?['Merchandising','Delivery']:[]),'Profile'];
+  const tabs = ['My Store','Orders','Inventory','Products','Store builder','Home Layout',...(store.slug==='trendora'?['Merchandising','Delivery']:[]),'Profile'];
   const selected = ownerProfileTabs.includes(ownerTab) ? 'Profile' : ownerTab;
   app.innerHTML = '<div class="admin-layout"><aside class="panel admin-sidebar">' + workspaceBrand + '<small>STORE OWNER</small>'
     + '<div class="admin-sections" aria-label="Store tools">' + tabs.map(tab => '<button data-owner-tab="' + tab + '" class="' + (tab===selected?'active':'') + '">' + tab + '</button>').join('') + '</div></aside>'
@@ -396,7 +398,9 @@ async function renderOwnerTab() {
       return;
     }
   }
-  if (tab==='My Store') return ownerStorePreview(target,token);
+  if(tab==='Home Layout')return ownerHomeLayout(target,token);
+  if(tab==='Ready to Publish')return renderDraftChecklist(target,token);
+  if(tab==='My Store')return store.demo_pack?renderSharedOwnerPreview(target):ownerStorePreview(target,token);
   if (tab==='Profile') {
     target.innerHTML='<section class="panel stack"><h2>Profile</h2><p>Manage your store identity, appearance, password and support.</p><div class="toolbar">'
       +ownerProfileTabs.map(label=>'<button data-owner-tab="'+label+'">'+label+'</button>').join('')+'</div></section>';
@@ -484,14 +488,19 @@ function applyStoreTheme(accent) {
 }
 
 async function readStorefront(slug){
-  const [store]=await request('/rest/v1/businesses?select='+businessColumns+'&active=eq.true&slug=eq.'+slug);
+  let store,token;
+  if(storefrontPreview){
+    token=await getSessionToken();
+    const memberships=await request('/rest/v1/business_members?select=businesses!inner('+businessColumns+')&businesses.slug=eq.'+slug,{token});
+    store=memberships[0]?.businesses;
+  }else [store]=await request('/rest/v1/businesses?select='+businessColumns+'&active=eq.true&slug=eq.'+slug);
   if(!store)return null;
   const filter='&business_id=eq.'+store.id;
   const [products,ads,themes,content]=await Promise.all([
-    request('/rest/v1/products?select=id,business_id,name,category,description,image_url,price_minor,sale_price_minor,gallery,sizes,colours,stock,active&active=eq.true&order=id'+filter),
+    request('/rest/v1/products?select=id,business_id,name,category,description,image_url,price_minor,sale_price_minor,gallery,sizes,colours,stock,active&active=eq.true&order=id'+filter,{token}),
     request('/rest/v1/store_ad_settings?select=title,image_url,destination_url'+filter),
-    request('/rest/v1/store_themes?select=accent'+filter),
-    contentFor(store.id)
+    request('/rest/v1/store_themes?select=accent'+filter,{token}),
+    contentFor(store.id,token)
   ]);
   return {store,products,ad:ads[0]||null,accent:themes[0]?.accent,content};
 }
@@ -536,6 +545,10 @@ async function boot() {
     if (parts.length !== 1 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(parts[0])) {
       app.innerHTML = '<h2>Page unavailable</h2><a href="/">Browse businesses</a>';
       return;
+    }
+    if(storefrontPreview){
+      adminSession=JSON.parse(sessionStorage.getItem(sessionKey)||'null');
+      if(!adminSession){app.innerHTML='<p>Sign in through the owner dashboard to preview this store.</p>';return;}
     }
     const snapshot=await readStorefront(parts[0]);
     if(!snapshot){app.innerHTML='<h2>Store unavailable</h2><a href="/">Browse businesses</a>';return;}
