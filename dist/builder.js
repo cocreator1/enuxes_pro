@@ -246,9 +246,10 @@ async function ownerStorePreview(target,token) {
   function render(){
     let content;
     if(page==='home'){
-      content='<section class="shop-profile">'+(imageTag(profile.logo,store.name)||'<div class="shop-avatar">'+esc(store.name.slice(0,1))+'</div>')
+      content='<section class="shop-profile">'+(imageTag(profile.logo,store.name)||'<div class="shop-avatar owner-image-empty" aria-hidden="true"></div>')
+        +'<label class="button owner-image-picker">Add image<input type="file" name="owner-preview-image" accept="image/jpeg,image/png,image/webp,image/gif"></label><p role="status" id="owner-image-status"></p>'
         +'<h1>'+esc(store.name)+'</h1><p>'+esc(store.description||'Your store description goes here.')+'</p>'
-        +action('Business profile','Edit logo and description')+'</section>'
+        +action('Business profile','Edit description')+'</section>'
         +'<section class="shop-sale"><strong>Store sale</strong><span>'+(sale.length?sale.length+' discounted products':'Set a sale price on a product to show this banner.')+'</span>'+action('Products','Edit sale prices')+'</section>'
         +'<div class="row shop-heading"><h2>Featured</h2>'+action('Products','Manage products')+'</div>'
         +(live.length?cards(live.slice(0,4)):empty)
@@ -274,9 +275,27 @@ async function ownerStorePreview(target,token) {
     }
     target.innerHTML='<div class="row"><p class="muted">Owner preview · Shopping actions are disabled.</p>'
       +(store.active?'<a class="button" href="/'+store.slug+'">View live store ↗</a>':'<span class="badge">Storefront unavailable</span>')+'</div>'
-      +'<div class="owner-preview shop-frame" style="--shop-tint:color-mix(in srgb,'+accent+' 16%,white)"><div class="owner-preview-content">'+content+'</div>'
+      +'<div class="owner-preview shop-frame" style="--shop-tint:color-mix(in srgb,'+accent+' 16%,white);--shop-ink:color-mix(in srgb,'+accent+' 70%,#142d22)"><div class="owner-preview-content">'+content+'</div>'
       +'<nav class="shop-tabs" aria-label="Preview screens">'+[['home','Home'],['shop','Shop'],['catalogue','Catalogue'],['cart','Cart']].map(([id,label])=>'<button data-preview-page="'+id+'" '+(page===id?'aria-current="page"':'')+'>'+shopIcon(id)+'<span>'+label+'</span></button>').join('')+'</nav></div>';
   }
+  target.addEventListener('change',async event=>{
+    const input=event.target;
+    if(input.name!=='owner-preview-image'||!input.files.length)return;
+    const status=target.querySelector('#owner-image-status');
+    input.disabled=true;
+    status.textContent='Uploading image…';
+    try{
+      const [logo]=await uploadMedia(input.files);
+      if(!logo)throw new Error('Choose an image file.');
+      await updateContent(store.id,{logo},await getSessionToken());
+      profile.logo=logo;
+      if(page==='home'&&target.isConnected){
+        render();
+        target.querySelector('#owner-image-status').textContent='Image saved.';
+      }
+    }catch(error){status.textContent=error.message;}
+    finally{input.disabled=false;input.value='';}
+  });
   target.addEventListener('click',event=>{
     const button=event.target.closest('button');
     if(!button)return;
