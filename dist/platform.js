@@ -11,7 +11,7 @@ let adminStores = [];
 let section = 'overview';
 let storeQuery = '';
 let storeStatus = '';
-const sections = {overview:'Overview',stores:'Stores',owners:'Owner access',billing:'Billing',analytics:'Analytics',ads:'Ads',support:'Support',security:'Security',archive:'Archive'};
+const sections = {overview:'Overview',marketplace:'Marketplace',stores:'Stores',owners:'Owner access',billing:'Billing',analytics:'Analytics',ads:'Ads',support:'Support',security:'Security',archive:'Archive'};
 const businessColumns = 'id,slug,name,type,description,active';
 
 async function request(endpoint, { method = 'GET', data, token, prefer } = {}) {
@@ -136,6 +136,7 @@ function dashboard() {
     + (section === 'overview'
       ? '<div class="grid">' + metrics + '</div><div class="split"><div class="panel stack"><h2>Store status</h2>' + distribution + '</div><div class="panel stack"><h2>Manage the platform</h2><div class="toolbar">'
         + '<button data-section="stores">Manage stores</button><button data-section="owners">Owner login links</button><button data-section="billing">Review billing holds</button><button data-section="support">Support conversations</button></div></div></div>'
+      : section === 'marketplace' ? '<div id="market-admin" class="stack"><p>Loading marketplace…</p></div>'
       : section === 'security' ? '<div class="panel stack"><h2>Change password</h2><p class="muted">Passwords are managed by Supabase Auth.</p><form id="main-admin-password">'
         + '<label>Current password<input name="current" type="password" autocomplete="current-password" required></label>'
         + '<label>New password<input name="password" type="password" minlength="14" autocomplete="new-password" required></label>'
@@ -149,6 +150,8 @@ function dashboard() {
     + '</section></div>';
   revealWorkspaceTab();
   renderStoreRows();
+  const market=app.querySelector('#market-admin');
+  if(market)marketplaceAdmin(market).catch(()=>{market.textContent='Marketplace could not load. Reopen the tab to retry.';});
 }
 
 function changeSection(next, status = '') {
@@ -488,12 +491,7 @@ async function boot() {
   app.innerHTML = '<p>Loading…</p>';
   const parts = location.pathname.split('/').filter(Boolean);
   try {
-    if (!parts.length) {
-      const stores = await request('/rest/v1/businesses?select=' + businessColumns + '&active=eq.true&order=name');
-      app.innerHTML = '<div class="hero"><section><span class="badge">BUSINESS DIRECTORY</span><h1>Shop local.</h1><p>Discover stores, restaurants and more on eNuxes.</p></section><div class="hero-art">' + icon('bag','#bdd0ff') + '</div></div><h2>Explore businesses</h2><div class="grid">'
-        + (stores.map(store => '<article class="panel"><small>' + esc(store.type.replaceAll('_',' ')) + '</small><h3>' + esc(store.name) + '</h3><p>' + esc(store.description) + '</p><a class="button" href="/' + store.slug + '">Visit business ↗</a></article>').join('') || '<p>No stores are open yet.</p>') + '</div>';
-      return;
-    }
+    if (!parts.length) { await marketplace(); return; }
     if (parts.length !== 1 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(parts[0])) {
       app.innerHTML = '<h2>Page unavailable</h2><a href="/">Browse businesses</a>';
       return;
