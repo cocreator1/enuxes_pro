@@ -78,6 +78,11 @@ body.workspace {background:#fff}
 .owner-preview .shop-photo img,.owner-preview .shop-photo svg{max-height:200px}
 .owner-profile-back{justify-self:start}
 @media(max-width:760px){.owner-preview-content{padding:11px}.owner-preview .shop-tabs button{min-height:48px}}
+.owner-image-empty{border:1px dashed var(--shop-ink,#166047)}
+.owner-image-picker{position:relative;display:inline-flex;margin-top:8px;cursor:pointer;border-radius:99px}
+.owner-image-picker input{position:absolute;inset:0;width:100%;opacity:0;cursor:pointer}
+.owner-image-picker:focus-within{outline:2px solid var(--shop-ink,#166047);outline-offset:2px}
+#owner-image-status:empty{display:none}
 </style><link rel="stylesheet" href="/shop.css"></head><body><header><nav id="nav"></nav></header><main id="app"></main><footer>eNuxes · Commerce & hospitality <span class="muted"> / Demo workspace</span></footer><dialog id="modal"></dialog><div id="toast" role="status"></div>
 <script>
 'use strict';
