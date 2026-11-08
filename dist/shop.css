@@ -116,13 +116,14 @@ dialog.owner-edit-sheet{position:fixed;inset:0 0 0 auto;margin:0;width:min(520px
 
 .workspace .owner-dashboard .admin-sections{justify-items:stretch}
 .workspace .owner-dashboard .admin-sections button{width:100%;min-height:46px;justify-content:center;text-align:center}
-.workspace .owner-dashboard .owner-brand{width:100%;max-width:none;margin:0;padding:.5rem;color:#172441;background:#fff}
+.workspace .owner-dashboard .owner-brand{width:min(100%,110px);max-width:none;aspect-ratio:1;justify-self:center;margin:0;padding:0;overflow:hidden;border-radius:50%;background:#fff}
+.workspace .owner-dashboard .owner-brand img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .owner-brand{position:relative;cursor:pointer;text-align:center}
 .owner-brand input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
 .owner-brand:focus-within{outline:2px solid #b0e1ff;outline-offset:2px}
 .owner-brand-status:empty{display:none}
 .workspace .owner-dashboard .owner-brand-status{letter-spacing:0;overflow-wrap:anywhere}
-.owner-brand span{display:block;margin-top:.25rem;font-size:.75rem}
+.owner-brand span{display:none}
 .owner-profile-tabs{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(8rem,1fr);gap:.55rem;overflow-x:auto;min-width:0;padding:.25rem;overscroll-behavior-inline:contain}
 .owner-profile-tabs button{min-height:88px;white-space:normal;border-radius:14px;padding:.7rem;text-align:center;background:#fff}
 .owner-profile-tabs button[aria-current=page]{background:#dbedf8;color:#173b56}
