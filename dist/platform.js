@@ -429,9 +429,13 @@ function ownerDashboard() {
   const store = ownerStore;
   const tabs = ['My Store','Orders','Inventory','Products','Store builder','Home Layout',...(store.slug==='trendora'?['Merchandising','Delivery']:[]),'Profile',...(!store.active&&!store.owner_published_at?['Ready to Publish']:[])];
   const selected = ownerProfileTabs.includes(ownerTab) ? 'Profile' : ownerTab;
-  app.innerHTML = '<div class="admin-layout owner-dashboard"><aside class="panel admin-sidebar">' + workspaceBrand + '<small>STORE OWNER</small>'
+  app.innerHTML = '<div class="admin-layout owner-dashboard"><aside class="panel admin-sidebar">' + '<button type="button" class="workspace-brand owner-brand" data-owner-tab="Business profile" aria-label="Edit store logo"><img src="/enuxes-lockup.svg" alt=""><span>Edit logo</span></button><small>STORE OWNER</small>'
     + '<nav class="admin-sections" aria-label="Store tools">' + tabs.map(tab => '<button ' + (tab==='My Store'?'data-owner-storefront':'data-owner-tab="'+tab+'"') + (tab===selected?' class="active" aria-current="page"':'') + '>' + tab + '</button>').join('') + '</nav></aside>'
     + '<section class="stack"><header class="row workspace-top"><div><small>' + esc(store.name) + '</small><h2>' + ownerTab + '</h2></div><div class="toolbar"><button data-owner-tab="Notifications">Notifications <span id="owner-alert-count"></span></button><button id="admin-signout">Sign out</button></div></header><div id="owner-content" class="stack"></div></section></div>' + ownerSettingsNav(store.slug);
+  const logoImage=app.querySelector('.owner-brand img');
+  getSessionToken().then(token=>contentFor(store.id,token)).then(content=>{
+    if(logoImage.isConnected&&safeImage(content.logo))logoImage.src=content.logo;
+  }).catch(()=>{});
   renderOwnerTab().catch(showOwnerError);
 }
 
@@ -457,14 +461,14 @@ async function renderOwnerTab() {
   }
   if(tab==='Home Layout')return ownerHomeLayout(target,token);
   if(tab==='Ready to Publish')return renderDraftChecklist(target,token);
-  if (tab==='Profile') {
-    target.innerHTML='<section class="panel stack"><h2>Profile</h2><p>Manage your store identity, appearance, password and support.</p><div class="toolbar">'
-      +ownerProfileTabs.map(label=>'<button data-owner-tab="'+label+'">'+label+'</button>').join('')+'</div></section>';
-    return;
-  }
-  if (ownerProfileTabs.includes(tab)) {
+  if (tab==='Profile'||ownerProfileTabs.includes(tab)) {
+    target.innerHTML='<nav class="owner-profile-tabs" aria-label="Profile sections">'
+      +ownerProfileTabs.map(label=>'<button data-owner-tab="'+label+'" '+(tab===label?'aria-current="page"':'')+'>'+label+'</button>').join('')+'</nav>';
+    if(tab==='Profile'){
+      target.insertAdjacentHTML('beforeend','<p>Manage your store identity, appearance, password and support.</p>');
+      return;
+    }
     const settingsTarget=document.createElement('div');
-    target.innerHTML='<button class="owner-profile-back" data-owner-tab="Profile">← Profile</button>';
     target.append(settingsTarget);
     if (['Account','Business profile'].includes(tab)) return ownerEditor(tab,settingsTarget,token);
     if (tab==='Support') {
