@@ -429,13 +429,35 @@ function ownerDashboard() {
   const store = ownerStore;
   const tabs = ['My Store','Orders','Inventory','Products','Store builder','Home Layout',...(store.slug==='trendora'?['Merchandising','Delivery']:[]),'Profile',...(!store.active&&!store.owner_published_at?['Ready to Publish']:[])];
   const selected = ownerProfileTabs.includes(ownerTab) ? 'Profile' : ownerTab;
-  app.innerHTML = '<div class="admin-layout owner-dashboard"><aside class="panel admin-sidebar">' + '<button type="button" class="workspace-brand owner-brand" data-owner-tab="Business profile" aria-label="Edit store logo"><img src="/enuxes-lockup.svg" alt=""><span>Edit logo</span></button><small>STORE OWNER</small>'
+  app.innerHTML = '<div class="admin-layout owner-dashboard"><aside class="panel admin-sidebar">' + '<label class="workspace-brand owner-brand"><img src="/enuxes-lockup.svg" alt=""><span>Upload logo</span><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" aria-label="Upload store logo"></label><small class="owner-brand-status" role="status"></small><small>STORE OWNER</small>'
     + '<nav class="admin-sections" aria-label="Store tools">' + tabs.map(tab => '<button ' + (tab==='My Store'?'data-owner-storefront':'data-owner-tab="'+tab+'"') + (tab===selected?' class="active" aria-current="page"':'') + '>' + tab + '</button>').join('') + '</nav></aside>'
     + '<section class="stack"><header class="row workspace-top"><div><small>' + esc(store.name) + '</small><h2>' + ownerTab + '</h2></div><div class="toolbar"><button data-owner-tab="Notifications">Notifications <span id="owner-alert-count"></span></button><button id="admin-signout">Sign out</button></div></header><div id="owner-content" class="stack"></div></section></div>' + ownerSettingsNav(store.slug);
+  const logoPicker=app.querySelector('.owner-brand input');
   const logoImage=app.querySelector('.owner-brand img');
+  const logoStatus=app.querySelector('.owner-brand-status');
+  logoPicker.disabled=true;
   getSessionToken().then(token=>contentFor(store.id,token)).then(content=>{
     if(logoImage.isConnected&&safeImage(content.logo))logoImage.src=content.logo;
-  }).catch(()=>{});
+  }).catch(()=>{}).finally(()=>{logoPicker.disabled=false;});
+  logoPicker.onchange=async()=>{
+    if(!logoPicker.files.length)return;
+    logoPicker.disabled=true;
+    logoStatus.textContent='Uploading…';
+    try{
+      const [logo]=await uploadMedia(logoPicker.files);
+      if(!logo)throw new Error('Choose a non-empty image.');
+      await updateContent(store.id,{logo},await getSessionToken());
+      const currentLogo=app.querySelector('.owner-brand img');
+      if(currentLogo&&ownerStore?.id===store.id)currentLogo.src=logo;
+      signalStorefrontSave(store.slug);
+      logoStatus.textContent='Logo saved';
+    }catch(error){
+      logoStatus.textContent=error.message;
+    }finally{
+      logoPicker.value='';
+      logoPicker.disabled=false;
+    }
+  };
   renderOwnerTab().catch(showOwnerError);
 }
 
