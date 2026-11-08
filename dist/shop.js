@@ -139,6 +139,9 @@ function startTrendoraRefresh(){
  const refresh=()=>refreshTrendora().catch(()=>{});
  setInterval(refresh,8000);
  window.addEventListener('online',refresh);
+ window.addEventListener('storage',event=>{
+  if(event.key==='enuxes-storefront-saved:'+business.slug)refresh();
+ });
  document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();});
  modal.addEventListener('close',refresh);
 }
