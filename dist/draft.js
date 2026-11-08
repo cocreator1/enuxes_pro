@@ -47,25 +47,35 @@ async function renderDraftChecklist(target,token){
 }
 function renderSharedOwnerPreview(target){
  const store=ownerStore;
- target.innerHTML='<div class="toolbar"><button data-owner-tab="Business profile">Edit profile</button><button data-owner-tab="Products">Add or edit products</button><button data-owner-tab="Home Layout">Layout and colours</button>'
+ const editorUrl='/'+encodeURIComponent(store.slug)+'?owner-preview=1';
+ target.innerHTML='<div class="toolbar"><a class="button primary" href="'+editorUrl+'">Edit Store</a><button data-owner-tab="Business profile">Edit profile</button><button data-owner-tab="Products">Add or edit products</button><button data-owner-tab="Home Layout">Layout and colours</button>'
   +(store.active?'<a class="button" href="/'+esc(store.slug)+'">View live store ↗</a>':store.owner_published_at?'':'<button class="primary" data-owner-tab="Ready to Publish">Publish Store</button>')+'</div>'
-  +'<iframe class="draft-store-preview" title="Storefront preview" src="/'+esc(store.slug)+'?owner-preview=1"></iframe>';
+  +'<iframe class="draft-store-preview" title="Storefront preview" src="'+editorUrl+'&amp;embedded=1"></iframe>';
 }
 
-let ownerEditing=true;
+const embeddedOwnerPreview=new URLSearchParams(location.search).get('embedded')==='1'&&window.parent!==window;
+let ownerEditing=!embeddedOwnerPreview;
 function canEditInlineStore(){
  return storefrontPreview&&ownerEditing;
 }
 
 function ownerStoreToolbar(){
- return storefrontPreview?'<div class="owner-store-toolbar"><button data-owner-mode="edit" aria-pressed="'+ownerEditing+'">Edit Store</button><button data-owner-mode="preview" aria-pressed="'+!ownerEditing+'">Preview</button><button data-owner-save disabled>Save Changes</button><small role="status">All changes saved</small></div>':'';
+ if(!storefrontPreview)return '';
+ const editorUrl='/'+encodeURIComponent(business.slug)+'?owner-preview=1';
+ if(embeddedOwnerPreview)return '<div class="owner-store-toolbar"><a class="button primary" target="_top" href="'+editorUrl+'">Edit Store</a></div>';
+ return '<div class="owner-store-toolbar"><a class="button" href="/'+encodeURIComponent(business.slug)+'/owner">Back to Panel 2</a><button data-owner-mode="edit" aria-pressed="'+ownerEditing+'">Edit Store</button><button data-owner-mode="preview" aria-pressed="'+!ownerEditing+'">Preview</button><button data-owner-save disabled>Save Changes</button><small role="status">All changes saved</small></div>';
 }
 
 function inlineEditButton(kind,id,label){
  return canEditInlineStore()?'<button type="button" data-inline-edit="'+kind+'" data-inline-id="'+esc(id)+'">'+label+'</button>':'';
 }
 
+function signalStorefrontSave(slug){
+ try{localStorage.setItem('enuxes-storefront-saved:'+slug,crypto.randomUUID());}catch{}
+}
+
 async function reloadInlineStore(){
+ signalStorefrontSave(business.slug);
  const snapshot=await readStorefront(business.slug);
  if(!snapshot)throw new Error('Store access is unavailable.');
  const top=window.scrollY;
