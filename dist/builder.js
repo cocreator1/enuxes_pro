@@ -73,11 +73,15 @@ async function ownerEditor(tab,target,token) {
 }
 
 function profileForm(store,content){
+  const banner=safeImage(content.merchandising?.profileBanner);
   return '<form id="owner-profile">'
       +field('Business name','name',store.name,100,'text',true)+field('Category','category',content.category,80)
       +'<label>Description<textarea name="description" maxlength="1000">'+esc(store.description)+'</textarea></label>'
       +field('Public email','email',content.email,254,'email')+field('Public phone','phone',content.phone,80,'tel')
-      +imageTag(content.logo,'Current business logo')+uploadField('logo')+'<div class="owner-editor-actions"><button class="primary">Save Changes</button><button type="button" data-action="close" class="owner-sheet-cancel">Cancel</button></div><p role="status"></p></form>';
+      +imageTag(content.logo,'Current business logo')+uploadField('logo')
+      +'<fieldset><legend>Profile background banner</legend>'+imageTag(banner,'Current profile background')
+      +'<label>'+(banner?'Replace banner':'Upload banner')+'<input name="profileBanner" type="file" accept="image/jpeg,image/png,image/webp,image/gif"></label>'
+      +(banner?'<label><span><input type="checkbox" name="removeProfileBanner"> Remove current banner</span></label>':'')+'</fieldset><div class="owner-editor-actions"><button class="primary">Save Changes</button><button type="button" data-action="close" class="owner-sheet-cancel">Cancel</button></div><p role="status"></p></form>';
 }
 
 function productEditor(product={}){
@@ -214,9 +218,17 @@ document.addEventListener('submit',async event=>{
     if(form.id==='admin-layout-limit'){
       await updateContent(form.dataset.id,{slideshow_limit:Number(value('limit'))},token);
     }else if(form.id==='owner-profile'){
-      const [logo]=await uploadMedia(data.getAll('logo'));
+      const [[logo],[banner]]=await Promise.all([
+        uploadMedia(data.getAll('logo')),
+        uploadMedia(data.getAll('profileBanner'))
+      ]);
+      let bannerChanges={};
+      if(banner||data.has('removeProfileBanner')){
+        const {merchandising={}}=await contentFor(ownerStore.id,token);
+        bannerChanges={merchandising:{...merchandising,profileBanner:banner||''}};
+      }
       await request('/rest/v1/businesses?id=eq.'+ownerStore.id,{method:'PATCH',token,data:{name:value('name'),description:value('description')}});
-      await updateContent(ownerStore.id,{email:value('email'),phone:value('phone'),category:value('category'),...(logo?{logo}:{})},token);
+      await updateContent(ownerStore.id,{email:value('email'),phone:value('phone'),category:value('category'),...(logo?{logo}:{}),...bannerChanges},token);
       ownerStore.name=value('name');ownerStore.description=value('description');
       const logoImage=app.querySelector('.owner-brand img');
       if(logo&&logoImage)logoImage.src=logo;
