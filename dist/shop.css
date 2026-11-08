@@ -138,3 +138,15 @@ dialog.owner-edit-sheet{position:fixed;inset:0 0 0 auto;margin:0;width:min(520px
 .owner-profile-tabs{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(8rem,1fr);gap:.55rem;overflow-x:auto;min-width:0;padding:.25rem;overscroll-behavior-inline:contain}
 .owner-profile-tabs button{min-height:88px;white-space:normal;border-radius:14px;padding:.7rem;text-align:center;background:#fff}
 .owner-profile-tabs button[aria-current=page]{background:#dbedf8;color:#173b56}
+
+.shop-card-media{position:relative}
+.shop-price-slot{position:absolute;inset:auto auto .55rem .55rem;display:flex;align-items:center;gap:.2rem;max-width:calc(100% - 1.1rem)}
+.shop-price-badge{display:inline-flex;flex-wrap:wrap;align-items:center;gap:.3rem;background:#fff;color:#111;padding:.32rem .52rem;border-radius:.5rem;box-shadow:0 1px 4px #0003;font-size:.83rem}
+.shop-price-badge del{font-size:.72rem}
+.visual-slot{display:inline-flex;align-items:center;gap:.2rem;min-width:0}
+.visual-slot>h2{min-width:0}
+.visual-dots{display:inline-grid;place-items:center;flex:none;min-width:32px;min-height:32px;padding:0 .3rem;background:#fff;color:#172441;border-radius:.5rem}
+.shop-tabs .visual-slot{position:relative;display:grid}
+.shop-tabs .visual-slot>.visual-dots{position:absolute;inset:auto 0 100% auto;min-height:32px}
+.shop-tabs .visual-slot>a{display:grid;justify-items:center;align-content:center;gap:3px;min-height:50px;font-size:12px}
+.visual-store-price{display:flex;justify-content:flex-end;align-items:center;gap:.3rem;font-size:.8rem}
