@@ -417,14 +417,21 @@ let ownerPoll;
 let supportLoad = 0;
 const workspaceBrand = '<a class="workspace-brand" href="/"><img src="/enuxes-lockup.svg" alt="eNuxes"></a>';
 
+function ownerSettingsNav(slug){
+  const editor='/'+encodeURIComponent(slug)+'?owner-preview=1';
+  const tabs=[['home','Home'],['shop','Shop'],['catalogue','Catalogue'],['cart','Cart']];
+  return '<nav class="shop-tabs shop-tabs-owner owner-settings-nav" aria-label="Store navigation">'
+    +tabs.map(([key,label])=>'<a href="'+editor+'&amp;tab='+key+'">'+shopIcon(key)+'<span>'+label+'</span></a>').join('')
+    +'<a href="/'+encodeURIComponent(slug)+'/owner" aria-current="page"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="8" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="10" cy="18" r="2"/></svg><span>Settings</span></a></nav>';
+}
+
 function ownerDashboard() {
   const store = ownerStore;
   const tabs = ['My Store','Orders','Inventory','Products','Store builder','Home Layout',...(store.slug==='trendora'?['Merchandising','Delivery']:[]),'Profile',...(!store.active&&!store.owner_published_at?['Ready to Publish']:[])];
   const selected = ownerProfileTabs.includes(ownerTab) ? 'Profile' : ownerTab;
   app.innerHTML = '<div class="admin-layout owner-dashboard"><aside class="panel admin-sidebar">' + workspaceBrand + '<small>STORE OWNER</small>'
     + '<nav class="admin-sections" aria-label="Store tools">' + tabs.map(tab => '<button ' + (tab==='My Store'?'data-owner-storefront':'data-owner-tab="'+tab+'"') + (tab===selected?' class="active" aria-current="page"':'') + '>' + tab + '</button>').join('') + '</nav></aside>'
-    + '<section class="stack"><header class="row workspace-top"><div><small>' + esc(store.name) + '</small><h2>' + ownerTab + '</h2></div><div class="toolbar"><button data-owner-tab="Notifications">Notifications <span id="owner-alert-count"></span></button><button id="admin-signout">Sign out</button></div></header><div id="owner-content" class="stack"></div></section></div>';
-  revealWorkspaceTab();
+    + '<section class="stack"><header class="row workspace-top"><div><small>' + esc(store.name) + '</small><h2>' + ownerTab + '</h2></div><div class="toolbar"><button data-owner-tab="Notifications">Notifications <span id="owner-alert-count"></span></button><button id="admin-signout">Sign out</button></div></header><div id="owner-content" class="stack"></div></section></div>' + ownerSettingsNav(store.slug);
   renderOwnerTab().catch(showOwnerError);
 }
 
@@ -602,7 +609,10 @@ async function boot() {
     const snapshot=await readStorefront(parts[0]);
     if(!snapshot){app.innerHTML='<h2>Store unavailable</h2><a href="/">Browse businesses</a>';return;}
     applyStorefront(snapshot);
+    const requestedTab=storefrontPreview?new URLSearchParams(location.search).get('tab'):null;
+    if(['shop','catalogue'].includes(requestedTab))shopPage=requestedTab;
     await startShop();
+    if(requestedTab==='cart')app.querySelector('[data-shop-page="cart"]')?.click();
   } catch { app.innerHTML = '<h2>Temporarily unavailable</h2><p>Refresh the page to try again.</p>'; }
 }
 
