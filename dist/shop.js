@@ -1,0 +1,163 @@
+const shopIcons={
+ home:'<path d="m3 10 9-7 9 7v10H3z"/><path d="M9 20v-6h6v6"/>',
+ shop:'<path d="M4 10v10h16V10M3 10l2-6h14l2 6M3 10c0 3 4 3 4 0 0 3 5 3 5 0 0 3 5 3 5 0 0 3 4 3 4 0"/>',
+ catalogue:'<rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/>',
+ cart:'<path d="M2 3h3l3 13h11l3-9H6"/><circle cx="9" cy="21" r="1"/><circle cx="18" cy="21" r="1"/>',
+ heart:'<path d="M12 21 4 13C-2 7 6 0 12 7c6-7 14 0 8 6z"/>',
+ search:'<circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/>',
+ people:'<circle cx="9" cy="8" r="3"/><path d="M2 20v-2a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v2m1-15a3 3 0 0 1 0 6m1 3c3 0 4 2 4 6"/>'
+};
+const shopIcon=name=>'<svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round">'+shopIcons[name]+'</svg>';
+let shopPage='home',shopFilter='',shopSearch='',shopOnlyFav=false,shopOnlySale=false,shopInfo={},shopCart=[],shopFav=[],shopDevice,shopRequest;
+let checkoutInFlight=false;
+const cartKey=()=> 'enuxes-shop-'+business.id;
+function loadSaved(key,fallback){try{return JSON.parse(localStorage.getItem(key))??fallback;}catch{return fallback;}}
+function saveShop(){try{localStorage.setItem(cartKey(),JSON.stringify({cart:shopCart,fav:shopFav,request:shopRequest}));}catch{}}
+const shopItems=()=>db.products.filter(p=>p.active);
+function shopPicture(p){return p.image?imageTag(p.image,p.name):icon('bag','var(--shop-ink,#166047)');}
+function shopPrice(p){return '<strong>'+money(price(p))+'</strong>'+(p.sale?'<del>'+money(p.price)+'</del>':'');}
+function shopCard(p){return '<article class="shop-card"><button class="shop-photo" data-item="'+p.id+'" aria-label="View '+esc(p.name)+'">'+shopPicture(p)+'</button>'
+ +'<button class="shop-heart '+(shopFav.includes(p.id)?'liked':'')+'" data-fav="'+p.id+'" aria-label="Favourite '+esc(p.name)+'" aria-pressed="'+shopFav.includes(p.id)+'">'+shopIcon('heart')+'</button>'
+ +'<div class="shop-card-copy"><button data-item="'+p.id+'">'+esc(p.name)+'</button><div>'+shopPrice(p)+'</div></div></article>';}
+function searchBox(){return '<label class="shop-search">'+shopIcon('search')+'<input id="shop-search" type="search" placeholder="Search products" aria-label="Search products" value="'+esc(shopSearch)+'"></label>';}
+function filteredItems(){return shopItems().filter(p=>(!shopFilter||p.category===shopFilter)&&(!shopOnlyFav||shopFav.includes(p.id))&&(!shopOnlySale||p.sale)&&[p.name,p.category,p.description].join(' ').toLowerCase().includes(shopSearch.toLowerCase()));}
+function updateShopGrid(){const grid=document.getElementById('shop-grid');if(grid)grid.innerHTML=filteredItems().map(shopCard).join('')||'<p>No matching products.</p>';}
+const collections=()=>[...new Set(shopItems().map(p=>p.category).filter(Boolean))];
+function shopNav(){return '<nav class="shop-tabs" aria-label="Store navigation">'+[['home','Home'],['shop','Shop'],['catalogue','Catalogue'],['cart','Cart']].map(([key,label])=>'<button data-shop-page="'+key+'" '+(shopPage===key?'aria-current="page"':'')+'>'+shopIcon(key)+'<span>'+label+(key==='cart'&&shopCart.length?' · '+shopCart.reduce((n,line)=>n+line.quantity,0):'')+'</span></button>').join('')+'</nav>';}
+function renderShop(){
+ const items=shopItems(), profile=publishedContent||{};
+ let body='';
+ if(shopPage==='home'){
+  const featured=items.slice(0,4);
+  body='<section class="shop-profile">'+(imageTag(profile.logo,business.name)||'<div class="shop-avatar">'+esc(business.name.slice(0,1).toUpperCase())+'</div>')
+   +'<h1>'+esc(business.name)+'</h1><small>on eNuxes</small><p>'+esc(business.description)+'</p>'
+   +'<button id="shop-follow" aria-pressed="'+Boolean(shopInfo.following)+'">'+shopIcon('people')+' '+(shopInfo.following?'Following':'Follow')+(Number.isFinite(Number(shopInfo.followers))?' · '+Number(shopInfo.followers).toLocaleString()+' followers':'')+'</button>'
+   +([profile.category,profile.email,profile.phone].some(Boolean)?'<p class="muted">'+[profile.category,profile.email,profile.phone].filter(Boolean).map(esc).join(' · ')+'</p>':'')+'</section>'
+   +(items.some(p=>p.sale)?'<button class="shop-sale" data-shop-sale><strong>Store sale</strong><span>Browse discounted products →</span></button>':'')
+   +bannerHtml()+searchBox()+'<div id="browse" class="row shop-heading"><h2>Featured</h2><button data-shop-page="shop">See all</button></div><div class="shop-grid" id="products">'+(featured.map(shopCard).join('')||'<p>No products yet.</p>')+'</div>';
+ }else if(shopPage==='shop'){
+  body='<div class="shop-heading"><h2>Shop all products</h2><p class="muted">Browse the collection</p></div>'+searchBox()
+   +'<div class="shop-filters"><label>Category<select id="shop-category"><option value="">All products</option>'+collections().map(c=>'<option value="'+esc(c)+'" '+(shopFilter===c?'selected':'')+'>'+esc(c)+'</option>').join('')+'</select></label>'
+   +'<button data-shop-filter="fav" aria-pressed="'+shopOnlyFav+'">'+shopIcon('heart')+' Favourites</button><button data-shop-filter="sale" aria-pressed="'+shopOnlySale+'">Sale</button></div><div class="shop-grid" id="shop-grid"></div>';
+ }else{
+  const groups=collections().map(c=>[c,items.find(p=>p.category===c&&p.image)]);
+  if(items.some(p=>p.sale))groups.push(['Sale',items.find(p=>p.sale&&p.image)]);
+  body='<div class="shop-heading"><h2>Catalogue</h2><p class="muted">Browse our collections</p></div><div class="shop-collections">'
+   +(groups.map(([name,p],index)=>'<button class="shop-collection" '+(index>=collections().length?'data-shop-sale':'data-collection="'+esc(name)+'"')+'>'+(p?imageTag(p.image):'')+'<strong>'+esc(name)+'</strong><span aria-hidden="true">›</span></button>').join('')||'<p>No collections yet.</p>')+'</div>';
+ }
+ app.innerHTML='<div class="shop-frame"><div class="shop-content">'+body+'</div>'+shopNav()+'</div>';
+ if(shopPage==='shop')updateShopGrid();
+ if(shopPage==='home')renderPublishedLayout();
+}
+
+function detail(id){
+ const p=getProduct(id);if(!p)return;
+ const options=(name,list)=>list?.length?'<fieldset><legend>'+name+'</legend><div class="shop-options">'+list.map((option,i)=>'<label><input type="radio" name="'+name+'" value="'+esc(option)+'" '+(i?'':'checked')+'><span>'+esc(option)+'</span></label>').join('')+'</div></fieldset>':'';
+ const photos=[p.image,...(Array.isArray(p.gallery)?p.gallery:[])].filter(safeImage);
+ modal.className='shop-detail';
+ openDialog('Details','<div class="shop-detail-photo">'+(photos.length?photos.map(url=>imageTag(url,p.name)).join(''):shopPicture(p))+'</div>'
+  +'<form id="shop-item" data-id="'+p.id+'"><div class="row"><h2>'+esc(p.name)+'</h2><button type="button" data-fav="'+p.id+'" aria-label="Favourite" aria-pressed="'+shopFav.includes(p.id)+'">'+shopIcon('heart')+'</button></div><div class="shop-detail-price">'+shopPrice(p)+'</div>'
+  +options('Colour',p.colours)+options('Size',p.sizes)
+  +'<label>Quantity <div class="shop-step"><button type="button" data-detail-step="-1" aria-label="Decrease quantity">−</button><input name="quantity" type="number" min="1" max="'+Math.min(99,p.stock??99)+'" value="1" aria-label="Quantity" required><button type="button" data-detail-step="1" aria-label="Increase quantity">+</button></div></label>'
+  +'<p>'+esc(p.description)+'</p>'+(p.stock===0?'<p>Out of stock</p>':'<div class="shop-cta"><button value="add">Add to Cart</button><button class="primary" value="buy">Buy Now</button></div>')+'</form>');
+}
+
+function showCart(){
+ modal.className='shop-sheet';
+ const subtotal=shopCart.reduce((sum,line)=>sum+price(getProduct(line.id))*line.quantity,0);
+ openDialog('My cart',shopCart.length?'<div class="shop-cart-lines">'+shopCart.map((line,i)=>{const p=getProduct(line.id);return '<article class="shop-cart-line"><div class="shop-thumb">'+shopPicture(p)+'</div><div><strong>'+esc(p.name)+'</strong><small>'+[line.size,line.colour].filter(Boolean).map(esc).join(' · ')+'</small><span>'+money(price(p)*line.quantity)+'</span></div><div class="shop-step"><button data-cart-index="'+i+'" data-cart-step="-1" aria-label="Decrease quantity">−</button><span>'+line.quantity+'</span><button data-cart-index="'+i+'" data-cart-step="1" aria-label="Increase quantity">+</button><button data-cart-index="'+i+'" data-cart-step="0" aria-label="Remove item">×</button></div></article>';}).join('')+'</div>'
+ +'<div class="shop-total"><div class="row"><span>Subtotal</span>'+money(subtotal)+'</div><div class="row"><span>Collection fee</span>'+money(0)+'</div>'
+ +(shopInfo.delivery_fee!=null?'<div class="row muted"><span>Delivery estimate (separate)</span>'+money(shopInfo.delivery_fee/100)+'</div>':'')
+ +'<div class="row"><strong>Total for collection</strong><strong>'+money(subtotal)+'</strong></div></div>'
+ +(shopInfo.collection?'<button class="primary shop-checkout" data-shop-checkout>Checkout</button>':'<p class="notice">Collection checkout is unavailable for this store.</p>'):'<p>Your cart is empty.</p>');
+}
+
+async function loadShopInfo(follow){
+ const [info]=await request('/rest/v1/rpc/shop_info',{method:'POST',data:{p_business:business.id,p_device:shopDevice,p_follow:follow??null}});
+ shopInfo=info||{};
+}
+async function startShop(){
+ document.body.classList.add('customer-shop');
+ document.querySelector('meta[name="viewport"]').content='width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover';
+ const saved=loadSaved(cartKey(),{});
+ shopCart=(Array.isArray(saved.cart)?saved.cart:[]).filter(line=>getProduct(line?.id)&&Number.isInteger(line.quantity)&&line.quantity>0&&line.quantity<=99);
+ shopFav=Array.isArray(saved.fav)?saved.fav:[];
+ shopRequest=saved.request||crypto.randomUUID();
+ shopDevice=loadSaved('enuxes-shop-device',null)||crypto.randomUUID();
+ try{localStorage.setItem('enuxes-shop-device',JSON.stringify(shopDevice));}catch{}
+ renderShop();
+ await loadShopInfo().catch(()=>{});
+ if(shopPage==='home'&&!modal.open)renderShop();
+}
+
+function changeShop(page){shopPage=page;renderShop();window.scrollTo(0,0);}
+function saveCartChange(){shopRequest=crypto.randomUUID();saveShop();}
+function maxShopQuantity(p){return Math.min(p.stock??99,99);}
+function addShopLine(p,selection,quantity){
+ const used=shopCart.filter(line=>line.id===p.id).reduce((sum,line)=>sum+line.quantity,0);
+ if(!Number.isInteger(quantity)||quantity<1||used+quantity>maxShopQuantity(p))throw new Error('That quantity is unavailable.');
+ const existing=shopCart.find(line=>line.id===p.id&&line.size===selection.size&&line.colour===selection.colour);
+ if(existing)existing.quantity+=quantity;
+ else{if(shopCart.length>=30)throw new Error('Your cart has reached its item limit.');shopCart.push({id:p.id,...selection,quantity});}
+ saveCartChange();
+}
+document.addEventListener('click',async event=>{
+ if(!document.body.classList.contains('customer-shop'))return;
+ const button=event.target.closest('button');if(!button)return;
+ const d=button.dataset;
+ if(d.shopPage){if(d.shopPage==='cart')return showCart();shopSearch=shopFilter='';shopOnlySale=shopOnlyFav=false;return changeShop(d.shopPage);}
+ if(d.item)return detail(d.item);
+ if(d.fav){
+  shopFav=shopFav.includes(d.fav)?shopFav.filter(id=>id!==d.fav):[...shopFav,d.fav];saveShop();
+  if(modal.open)button.setAttribute('aria-pressed',shopFav.includes(d.fav));renderShop();return;
+ }
+ if(d.collection!==undefined||d.shopSale!==undefined){shopFilter=d.collection||'';shopOnlySale=d.shopSale!==undefined;shopOnlyFav=false;shopSearch='';return changeShop('shop');}
+ if(d.shopFilter){if(d.shopFilter==='fav')shopOnlyFav=!shopOnlyFav;else shopOnlySale=!shopOnlySale;return renderShop();}
+ if(button.id==='shop-follow'){
+  button.disabled=true;try{await loadShopInfo(!shopInfo.following);renderShop();}catch{toast('Could not update follow status.');button.disabled=false;}return;
+ }
+ if(d.detailStep){const input=button.form.elements.quantity;input.value=Math.max(1,Math.min(Number(input.max),Number(input.value)+Number(d.detailStep)));return;}
+ if(d.cartIndex!==undefined){
+  const index=Number(d.cartIndex),line=shopCart[index],step=Number(d.cartStep);if(!line||checkoutInFlight)return;
+  const p=getProduct(line.id),used=shopCart.filter(row=>row.id===p.id).reduce((sum,row)=>sum+row.quantity,0);
+  if(step>0&&used>=maxShopQuantity(p))return toast('That quantity is unavailable.');
+  if(!step||line.quantity+step<1)shopCart.splice(index,1);else line.quantity+=step;
+  saveCartChange();renderShop();return showCart();
+ }
+ if(d.shopCheckout!==undefined&&shopInfo.collection&&shopCart.length){
+  const total=shopCart.reduce((sum,line)=>sum+price(getProduct(line.id))*line.quantity,0);
+  openDialog('Checkout','<form id="shop-order"><p>Pay '+money(total)+' when you collect your order.</p><label>Name<input name="name" autocomplete="name" maxlength="100" required></label><label>Mobile<input name="mobile" type="tel" autocomplete="tel" minlength="5" maxlength="30" required></label><button class="primary">Place collection order</button><p role="status"></p></form>');
+ }
+});
+document.addEventListener('input',event=>{
+ if(event.target.id!=='shop-search')return;
+ shopSearch=event.target.value;
+ if(shopPage==='home'){
+  const caret=event.target.selectionStart;
+  shopPage='shop';renderShop();
+  const input=document.getElementById('shop-search');input.focus();
+  if(caret!==null)try{input.setSelectionRange(caret,caret);}catch{}
+ }else updateShopGrid();
+});
+document.addEventListener('change',event=>{if(event.target.id==='shop-category'){shopFilter=event.target.value;updateShopGrid();}});
+document.addEventListener('submit',async event=>{
+ const form=event.target;if(!['shop-item','shop-order'].includes(form.id))return;
+ event.preventDefault();const fields=new FormData(form);
+ if(form.id==='shop-item'){
+  const p=getProduct(form.dataset.id);if(!p)return;
+  try{addShopLine(p,{size:fields.get('Size'),colour:fields.get('Colour')},Number(fields.get('quantity')));
+   renderShop();if(event.submitter?.value==='buy')showCart();else{modal.close();toast('Added to cart');}
+  }catch(error){toast(error.message);}return;
+ }
+ if(checkoutInFlight||!shopCart.length)return;
+ const button=form.querySelector('button');button.disabled=true;checkoutInFlight=true;
+ try{
+  const id=await request('/rest/v1/rpc/shop_order',{method:'POST',data:{p_business:business.id,p_request:shopRequest,p_name:String(fields.get('name')).trim(),p_mobile:String(fields.get('mobile')).trim(),p_lines:shopCart}});
+  shopCart=[];saveCartChange();renderShop();
+  openDialog('Order placed','<p>Order <strong>#'+esc(id.slice(0,8).toUpperCase())+'</strong></p><p>Pay when you collect from '+esc(business.name)+'.</p>');
+ }catch(error){form.querySelector('[role=status]').textContent=error.message;}
+ finally{checkoutInFlight=false;button.disabled=false;}
+});
+modal.addEventListener('cancel',event=>{if(checkoutInFlight)event.preventDefault();});
+modal.addEventListener('click',event=>{if(checkoutInFlight&&event.target.closest('[data-action="close"]'))event.stopPropagation();});
+modal.addEventListener('close',()=>{modal.className='';});
