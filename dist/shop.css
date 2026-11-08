@@ -219,3 +219,9 @@ body:has(.shop-frame>.shop-tabs)>footer{
 @media(max-width:460px){
  body:has(.shop-frame>.shop-tabs)>footer{width:calc(100% - 24px)}
 }
+
+.shop-price-badge{font-size:1rem;padding:.42rem .65rem;min-height:34px}
+.shop-price-badge del{font-size:.78rem}
+.shop-card-media:has(.shop-quick-add) .shop-price-slot{max-width:calc(100% - 3.7rem)}
+.shop-quick-add{position:absolute;inset:auto .55rem .55rem auto;display:grid;place-items:center;width:44px;height:44px;padding:0;border-radius:.7rem;background:#fff;color:var(--shop-ink,#166047);font-size:1.5rem;line-height:1}
+.shop-card-description{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere;margin:.15rem 0 .35rem;font-size:.85rem;line-height:1.35;color:inherit;opacity:.8}
