@@ -112,7 +112,6 @@ dialog.owner-edit-sheet{position:fixed;inset:0 0 0 auto;margin:0;width:min(520px
  .owner-dashboard>section,.owner-dashboard #owner-content{min-width:0}
  .owner-settings-nav{inset:auto 0 0;transform:none;margin-inline:auto;width:100%}
  .shop-frame>.shop-tabs{position:fixed;inset:auto 0 0;transform:none;margin-inline:auto;width:100%}
- body:has(.shop-frame>.shop-tabs) footer{padding-bottom:calc(5rem + env(safe-area-inset-bottom))}
 }
 
 .workspace .owner-dashboard .admin-sections{justify-items:stretch}
@@ -154,3 +153,14 @@ dialog.owner-edit-sheet{position:fixed;inset:0 0 0 auto;margin:0;width:min(520px
 .owner-photo-editor{display:grid;gap:.5rem;min-width:0}
 .owner-photo-editor img{width:100%;height:clamp(130px,34vh,260px);object-fit:contain;border-radius:.8rem;background:#edf2eb}
 .owner-photo-editor input{width:100%;min-width:0}
+
+/* Reserve room for fixed navigation, including owner controls above its top edge. */
+body:has(.shop-frame>.shop-tabs) footer,
+body:has(.owner-settings-nav) footer{margin-bottom:calc(76px + env(safe-area-inset-bottom))}
+body:has(.shop-frame>.shop-tabs-owner) footer{margin-bottom:calc(112px + env(safe-area-inset-bottom))}
+.shop-tabs .visual-slot> :is(button:not(.visual-dots),a){min-width:0;width:100%}
+.shop-tabs .visual-slot> :is(button,a)>span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.shop-frame>.shop-tabs::before,.owner-settings-nav::before{
+ content:"";position:absolute;z-index:-1;inset:0 calc((100% - 100vw)/2);
+ background:inherit;border-radius:inherit;
+}
