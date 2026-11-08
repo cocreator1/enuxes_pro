@@ -523,3 +523,39 @@ document.addEventListener('submit',async event=>{
   status.textContent='Order status saved.';
  }catch(error){status.textContent=error.message;}finally{button.disabled=false;}
 });
+
+async function ownerCheckoutSettings(target,token){
+ const store=ownerStore;
+ const [content,settings]=await Promise.all([contentFor(store.id,token),request('/rest/v1/business_settings?select=collection_enabled,collection_payment_enabled,delivery_enabled,delivery_fee_minor&business_id=eq.'+store.id,{token})]);
+ if(!target.isConnected)return;
+ const current=settings[0]||{};
+ const config=content.merchandising?.checkout||{pickup:current.collection_enabled,collection:current.collection_payment_enabled,delivery:current.delivery_enabled,fee:current.delivery_fee_minor};
+ const toggle=(key,label)=>'<label class="shop-choice"><input type="checkbox" name="'+key+'" '+(config[key]?'checked':'')+'>'+label+'</label>';
+ target.insertAdjacentHTML('beforeend','<section class="panel stack"><h2>Checkout settings</h2><form id="owner-checkout">'
+  +toggle('pickup','Enable pick-up')+field('Collection point','collectionPoint',config.collectionPoint,250)
+  +toggle('delivery','Enable drop-off')+'<label>Delivery fee (N$)<input name="fee" type="number" min="0" max="21474836.47" step=".01" value="'+((config.fee||0)/100)+'" required></label>'
+  +toggle('tips','Allow tips')+toggle('collection','Pay on collection')+toggle('cash','Cash on Delivery')
+  +['card','wallet','pay2cell'].map(key=>toggle(key,checkoutLabels[key])+field(checkoutLabels[key]+' instructions (manual)',key+'Instructions',config[key+'Instructions'],500)).join('')
+  +'<small>Give customers payment instructions. These methods record a pending order. Card payments can be taken on your own terminal.</small>'
+  +'<button class="primary">Save checkout settings</button><p role="status"></p></form></section>');
+ const form=target.querySelector('#owner-checkout');
+ form.onsubmit=async event=>{
+  event.preventDefault();
+  const button=form.querySelector('button'),status=form.querySelector('[role=status]');
+  if(button.disabled)return;
+  const data=new FormData(form),read=key=>String(data.get(key)||'').trim();
+  const checkout={fee:Math.round(Number(read('fee'))*100),collectionPoint:read('collectionPoint')};
+  for(const key of ['pickup','delivery','tips','collection','cash','card','wallet','pay2cell'])checkout[key]=data.has(key);
+  for(const key of ['card','wallet','pay2cell']){
+   checkout[key+'Instructions']=read(key+'Instructions');
+   if(checkout[key]&&!checkout[key+'Instructions']){status.textContent='Add instructions for '+checkoutLabels[key]+'.';return;}
+  }
+  button.disabled=true;status.textContent='Saving…';
+  try{
+   const token=await getSessionToken(),latest=await contentFor(store.id,token);
+   await updateContent(store.id,{merchandising:{...latest.merchandising,checkout}},token);
+   signalStorefrontSave(store.slug);
+   status.textContent='Checkout settings saved.';
+  }catch(error){status.textContent=error.message;}finally{button.disabled=false;}
+ };
+}
