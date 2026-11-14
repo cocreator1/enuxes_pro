@@ -1,0 +1,548 @@
+diff --git a/dist/billing.js b/dist/billing.js
+index 03aa21b..391d0c6 100644
+--- a/dist/billing.js
++++ b/dist/billing.js
+@@ -11,7 +11,7 @@ async function loadTopUpRequests(el){try{const rows=await billingRpc('platform_t
+ async function renderOwnerBilling(el,token,{compact=false}={}){const id=ownerStore.id;try{const b=await request('/rest/v1/rpc/owner_store_billing',{method:'POST',token,data:{p_business:id}});if(!el.isConnected||ownerStore.id!==id)return;el.innerHTML='<section class="panel stack"><h3>Billing</h3>'+billingSummary(b)+'<button class="billing-topup-action" '+(compact?'data-owner-tab="Billing"':'data-owner-topup')+'>Request for top up</button></section>'+(!compact?'<section class="panel stack"><h3>Your top-up requests</h3>'+(b.requests.map(r=>'<article class="billing-request"><div class="row"><strong>'+billingMoney(r.amount_minor)+'</strong><span class="badge">'+esc(r.status)+'</span></div><small>'+esc(billingDate(r.created_at))+'</small><p>'+esc(r.message||'Awaiting payment verification.')+'</p></article>').join('')||'<p>No requests yet.</p>')+'</section>'+billingHistory(b):'');}catch(e){el.textContent='Billing could not load. '+e.message;}}
+ async function checkOwnerBillingAlerts(store,token){const b=await request('/rest/v1/rpc/owner_store_billing',{method:'POST',token,data:{p_business:store.id}});if(ownerStore?.id!==store.id)return;store.active=b.active;const visibility=app.querySelector('[data-owner-visibility]');if(visibility)visibility.textContent=b.active?'Unpublish Store':'Publish Store';const menu=app.querySelector('[data-owner-tab="Billing"]');if(menu)menu.innerHTML=billingMenuLabel(b);const unread=b.notices.filter(n=>!n.read_at);const badge=document.getElementById('owner-alert-count');if(badge){badge.dataset.billingUnread=unread.length;const count=unread.length+Number(badge.dataset.activityCount||0);badge.textContent=count?String(count):'';}let el=app.querySelector('.owner-billing-reminder');if(!unread.length||!billingNeedsAttention(b)){el?.remove();return;}if(!el){el=document.createElement('aside');el.className='owner-billing-reminder panel';app.prepend(el);}el.innerHTML='<p role="status"><strong>Billing reminder · '+unread[0].days_left+' '+(unread[0].days_left===1?'day':'days')+' left</strong><br>Top up '+billingMoney(b.fee_minor-b.balance_minor)+' before '+esc(billingDate(b.paid_until))+'.</p><button class="billing-topup-action" data-owner-tab="Billing">Request for top up</button>';}
+ async function renderBillingNotifications(el,token){const b=await request('/rest/v1/rpc/owner_store_billing',{method:'POST',token,data:{p_business:ownerStore.id}});if(!el.isConnected)return;el.innerHTML='<button type="button" data-account-notices>Billing & support inbox</button><div class="row"><h3>Billing notifications</h3><button data-owner-tab="Billing">Billing · '+billingMoney(b.balance_minor)+'</button></div>'+(b.notices.map(n=>'<p class="line"><strong>'+n.days_left+' '+(n.days_left===1?'day':'days')+' before billing</strong> · Top up '+billingMoney(b.fee_minor-b.balance_minor)+'.<small>'+esc(billingDate(n.created_at))+'</small></p>').join('')||'<p>No billing reminders.</p>')+b.requests.filter(r=>r.status!=='pending').map(r=>'<p class="line"><strong>Top-up '+esc(r.status)+' · '+billingMoney(r.amount_minor)+'</strong><br>'+esc(r.message)+'</p>').join('')+(b.notices.some(n=>!n.read_at)?'<button data-billing-read>Mark billing reminders as read</button>':'');}
+-function showClosedStore(state='closed'){if(modal.open)modal.close();updateStoreFavicon();nav.innerHTML=workspaceBrand;document.body.classList.remove('customer-shop','mona-store','trendora-shop');document.querySelectorAll('.shop-tabs').forEach(el=>el.remove());app.innerHTML='<section class="store-closed-state" role="status">'+(state==='closed'?'<svg viewBox="0 0 100 48" aria-hidden="true"><path id="closed-infinity" d="M50 24 C39 14 31 7 22 7 C12 7 5 14 5 24 S12 41 22 41 C31 41 39 34 50 24 C61 14 69 7 78 7 C88 7 95 14 95 24 S88 41 78 41 C69 41 61 34 50 24 Z" fill="none" stroke="currentColor" stroke-width="3"/><circle r="4" fill="#2563eb"><animateMotion dur="1.8s" repeatCount="indefinite"><mpath href="#closed-infinity"/></animateMotion></circle></svg><h2>Closed Temporarily</h2><p>Please check back soon.</p>':'<h2>Store unavailable</h2>')+'<a href="/">Browse businesses</a></section>';}
++function showClosedStore(state='closed'){document.getElementById('seo-public-facts')?.remove();if(modal.open)modal.close();updateStoreFavicon();nav.innerHTML=workspaceBrand;document.body.classList.remove('customer-shop','mona-store','trendora-shop');document.querySelectorAll('.shop-tabs').forEach(el=>el.remove());app.innerHTML='<section class="store-closed-state" role="status">'+(state==='closed'?'<svg viewBox="0 0 100 48" aria-hidden="true"><path id="closed-infinity" d="M50 24 C39 14 31 7 22 7 C12 7 5 14 5 24 S12 41 22 41 C31 41 39 34 50 24 C61 14 69 7 78 7 C88 7 95 14 95 24 S88 41 78 41 C69 41 61 34 50 24 Z" fill="none" stroke="currentColor" stroke-width="3"/><circle r="4" fill="#2563eb"><animateMotion dur="1.8s" repeatCount="indefinite"><mpath href="#closed-infinity"/></animateMotion></circle></svg><h2>Closed Temporarily</h2><p>Please check back soon.</p>':'<h2>Store unavailable</h2>')+'<a href="/">Browse businesses</a></section>';}
+ async function checkPublicStoreBilling(){if(storefrontPreview||!business?.slug||document.hidden)return;const state=await request('/rest/v1/rpc/storefront_availability',{method:'POST',data:{p_slug:business.slug}});if(state!=='active'&&!app.querySelector('.store-closed-state'))showClosedStore(state);}
+ document.addEventListener('click',async event=>{const b=event.target.closest('button');if(!b)return;try{
+  if(b.dataset.storeTopup)return openStoreTopUp(b.dataset.storeTopup);
+diff --git a/dist/index.html b/dist/index.html
+index a5f929f..5574e2e 100644
+--- a/dist/index.html
++++ b/dist/index.html
+@@ -136,6 +136,7 @@ body:has(>.startup-loading)>:is(header,main,footer){visibility:hidden}
+ 
+ .admin-mfa-card{max-width:480px;margin:24px auto}.admin-mfa-qr{width:224px;max-width:100%;height:auto;align-self:center;background:#fff;padding:12px;border-radius:12px}.admin-mfa-secret{overflow-wrap:anywhere;user-select:all;padding:12px;background:#f1f4f8;border-radius:8px}
+ </style><link rel="stylesheet" href="/shop.css?v=support-inbox-1"><link rel="stylesheet" href="/store-appearance.css"><link rel="stylesheet" href="/store-themes.css"><link rel="stylesheet" href="/business-templates.css"><link rel="stylesheet" href="/billing.css?v=4"><link rel="stylesheet" href="/visitor-profile.css?v=customer-flow-2"><link rel="stylesheet" href="/marketplace-ui.css?v=notice-read-1"><link rel="stylesheet" href="/vendor/leaflet/leaflet.css"><link rel="stylesheet" href="/map-discovery.css?v=6"><link rel="stylesheet" href="/vendor/design-tokens/open-props-selected.css"><link rel="stylesheet" href="/experience.css?v=owner-control-1"><link rel="stylesheet" href="/presentations.css?v=creator-overlay-2"><link rel="stylesheet" href="/settings-ui.css?v=control-room-2"><link rel="stylesheet" href="/owner-overview.css?v=2"><link rel="stylesheet" href="/overview-display.css?v=1">
++<link rel="stylesheet" href="/seo.css?v=1">
+ </head><body><header hidden><nav id="nav"></nav></header><div class="startup-loading" role="status">
+     <svg viewBox="0 0 100 48" width="100" height="48" aria-hidden="true" focusable="false">
+       <path id="startup-loop" d="M50 24 C39 14 31 7 22 7 C12 7 5 14 5 24 S12 41 22 41 C31 41 39 34 50 24 C61 14 69 7 78 7 C88 7 95 14 95 24 S88 41 78 41 C69 41 61 34 50 24 Z" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+@@ -205,4 +206,4 @@ document.addEventListener('input', event => {
+   if (event.target.id === 'search') { query = event.target.value; filter(); }
+ });
+ </script><script src="/visitor-profile.js?v=saved-haptics-1"></script><script src="/customer-account.js?v=customer-flow-2"></script><script src="/store-links.js"></script><script src="/save-state.js?v=saved-haptics-1"></script><script src="/presentations.js?v=creator-overlay-2"></script><script src="/builder.js?v=settings-1"></script><script src="/order-audio.js"></script><script src="/shop-notifications.js?v=customer-flow-2"></script><script src="/shop.js?v=catalogues-1"></script><script src="/marketplace.js?v=saved-haptics-1"></script><script src="/store-appearance.js"></script><script src="/store-themes.js"></script><script src="/home-layout.js?v=saved-haptics-1"></script><script src="/draft.js"></script><script src="/owner-lock.js?v=idle-lock-2"></script><script src="/owner-alerts.js"></script><script src="/admin-preload.js"></script><script src="/business-templates.js?v=catalogues-1"></script><script src="/business-template-editor.js?v=settings-1"></script><script src="/billing.js?v=4"></script><script src="/store-locations.js?v=suburb-pins-1"></script><script src="/map-discovery.js?v=suburb-pins-1"></script><script src="/directory-admin.js?v=1"></script><script src="/marketplace-ui.js?v=notice-read-1"></script><script src="/account-notifications.js?v=panel-routing-3"></script><script src="/admin-support.js?v=reply-actions-2"></script><script src="/admin-mfa.js?v=1"></script><script src="/experience.js?v=control-room-2"></script><script src="/owner-control.js?v=1"></script><script src="/catalogues.js?v=1"></script><script src="/overview-display.js?v=1"></script>
+-<script src="/owner-overview.js?v=2"></script><script src="/platform.js?v=overview-display-1"></script></body></html>
++<script src="/owner-overview.js?v=2"></script><script src="/seo-core.js?v=1"></script><script src="/seo-owner.js?v=1"></script><script src="/platform.js?v=seo-foundations-1"></script></body></html>
+diff --git a/dist/platform.js b/dist/platform.js
+index 8261ce3..35b9547 100644
+--- a/dist/platform.js
++++ b/dist/platform.js
+@@ -16,10 +16,10 @@ let adminSession, sessionRefresh;
+ let adminStores = [];
+ let section = 'overview';
+ const accountNoticeSection=new URLSearchParams(location.search).get('section');
+-if(['overview','marketplace','stores','owners','billing','analytics','ads','support','security','appLock','archive'].includes(accountNoticeSection))section=accountNoticeSection;
++if(['overview','marketplace','stores','owners','billing','analytics','ads','support','security','appLock','archive','seo'].includes(accountNoticeSection))section=accountNoticeSection;
+ let storeQuery = '';
+ let storeStatus = '';
+-const sections = {overview:'Overview',marketplace:'Marketplace',stores:'Stores',owners:'Owner access',billing:'Top up store',analytics:'Analytics',ads:'Banner',support:'Support',security:'Security',appLock:'Profile Settings',archive:'Archive'};
++const sections = {overview:'Overview',marketplace:'Marketplace',stores:'Stores',owners:'Owner access',billing:'Top up store',analytics:'Analytics',ads:'Banner',support:'Support',security:'Security',appLock:'Profile Settings',seo:'SEO & Google discovery',archive:'Archive'};
+ const businessColumns = 'id,slug,name,type,description,active,demo_pack,owner_published_at';
+ 
+ async function request(endpoint, { method = 'GET', data, token, prefer, withCount = false } = {}) {
+@@ -244,6 +244,7 @@ function dashboard() {
+         + '<button data-section="stores">Manage stores</button><button data-section="owners">Owner login links</button><button data-section="billing">Review billing holds</button><button data-section="support">Support conversations</button></div></div></div>'
+       : section === 'marketplace' ? '<div id="market-admin" class="stack"><p>Loading marketplace…</p></div>'
+       : section === 'support' ? '<div id="admin-support-inbox"></div>'
++      : section === 'seo' ? '<div id="admin-seo"></div>'
+       : section === 'ads' ? adminBannerForm()
+       : section === 'appLock' ? '<div id="admin-app-lock"></div>'
+       : section === 'security' ? '<section id="admin-mfa-settings" class="panel stack"></section><div class="panel stack"><h2>Change password</h2><p class="muted">Passwords are managed by Supabase Auth.</p><form id="main-admin-password">'
+@@ -258,6 +259,7 @@ function dashboard() {
+         + '<div class="stack" id="admin-store-rows"></div>')
+     + '</section></div>';
+   if(section==='overview'){const root=app.querySelector('.main-admin-dashboard>section');root.classList.add('admin-overview-display');bindOverviewDisplay(root,'admin');}
++  if(section==='seo')renderAdminSEO(app.querySelector('#admin-seo'));
+   if(section==='security')renderAdminMfaSettings();
+   const billingHost=app.querySelector('.main-admin-dashboard>section');
+   if(adminMfaState&&!adminMfaState.required&&section==='overview')billingHost.insertAdjacentHTML('afterbegin','<section class="panel"><strong>Protect Main Admin with an authenticator.</strong><p>MFA is not active yet.</p><button type="button" data-section="security">Set up Admin MFA</button></section>');
+@@ -648,7 +650,7 @@ document.addEventListener('submit', async event => {
+ 
+ let ownerStore;
+ let ownerTab = 'Overview';
+-const ownerProfileTabs = ['Business profile','Store settings','Account','App Lock','Support'];
++const ownerProfileTabs = ['Business profile','Store settings','SEO & Google Visibility','Account','App Lock','Support'];
+ let ownerPoll;
+ let supportLoad = 0;
+ const workspaceBrand = '<a class="workspace-brand" href="/"><img src="/enuxes-lockup.svg" alt="eNuxes"></a>';
+@@ -915,6 +917,7 @@ async function renderOwnerTab() {
+     const settingsTarget=document.createElement('div');
+     target.append(settingsTarget);
+     if(tab==='App Lock'){settingsTarget.id='owner-app-lock';return ownerLockSettings(settingsTarget);}
++    if(tab==='SEO & Google Visibility')return ownerSEOEditor(settingsTarget,store,token);
+     if (['Account','Business profile'].includes(tab)) return ownerEditor(tab,settingsTarget,token);
+     if (tab==='Support') {
+       settingsTarget.innerHTML='<div class="panel"><h2>Support</h2><p>Chat with the eNuxes team about this store.</p><button data-support="'+store.id+'">Open conversation</button></div>';
+@@ -1070,8 +1073,13 @@ function updateStoreFavicon(store, content) {
+ }
+ 
+ let storefrontVersion;
++function renderPublicSEOInfo(store,content,items){if(storefrontPreview)return;const p=EnuxesSEO.profile(store,content);let host=document.getElementById('seo-public-facts');if(!host){host=document.createElement('section');host.id='seo-public-facts';host.className='seo-public-facts';app.after(host);}host.innerHTML='<details><summary>Business information & catalogue links</summary>'+EnuxesSEO.facts(p)+EnuxesSEO.links(p,items)+'<a href="/discover">Discover businesses on eNuxes</a></details>';}
++
+ function applyStorefront(snapshot){
+   business=snapshot.store;
++  const seoPublic=EnuxesSEO.profile(snapshot.store,snapshot.content);
++  if(seoPublic.seo.publicDescription)business.description=seoPublic.seo.publicDescription;
++  renderPublicSEOInfo(business,snapshot.content,snapshot.products);
+   db.products=snapshot.products.map(p=>({...p,businessId:p.business_id,price:p.price_minor/100,sale:p.sale_price_minor/100,image:safeImage(p.image_url)}));
+   storeBanner=snapshot.ad;
+   publishedContent=snapshot.content;
+@@ -1124,7 +1132,8 @@ async function boot() {
+   if (!parts.length) showShell();
+   try {
+     if (!parts.length) { await marketplace(); return; }
+-    if (parts.length !== 1 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(parts[0])) {
++    const seoItemRoute=parts.length===3&&['products','services'].includes(parts[1])&&/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(parts[2]);
++    if ((parts.length !== 1&&!seoItemRoute) || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(parts[0])) {
+       app.innerHTML = '<h2>Page unavailable</h2><a href="/">Browse businesses</a>';
+       return;
+     }
+@@ -1143,6 +1152,7 @@ async function boot() {
+     const shopReady = startShop();
+     showShell();
+     await shopReady;
++    if(seoItemRoute){const item=getProduct(parts[2]);if(item){if(btActive())btDetails(item.id);else detail(item.id);}return;}
+     if(await openSharedCustomerTracking())return;
+     const destination=internalStoreDestination(location.hash);
+     if(destination)openStoreDestination(destination);
+diff --git a/dist/seo-core.js b/dist/seo-core.js
+new file mode 100644
+index 0000000..535edf3
+--- /dev/null
++++ b/dist/seo-core.js
+@@ -0,0 +1,23 @@
++/* Shared pure presentation rules. Never use SEO settings to grant business access. */
++const EnuxesSEO=(()=>{
++ const origin='https://enuxes.com',templates={retail:'Retail & Clothing',accommodation:'Accommodation',salon:'Salon & Barbershop',restaurant:'Restaurant & Takeaway',cafe:'Café & Snacks',bar:'Bar & Lounge',professional:'Professional & Creator'};
++ const text=(v,max=1000)=>typeof v==='string'?v.replace(/<[^>]*>/g,' ').replace(/[\u0000-\u001f\u007f]/g,' ').replace(/\s+/g,' ').trim().slice(0,max):'';
++ const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
++ const slug=v=>text(v,100).normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
++ function https(v){if(typeof v!=='string'||v.length>2000)return '';try{const u=new URL(v);return u.protocol==='https:'&&!u.username&&!u.password&&!u.hostname.match(/^(localhost|127\.|0\.|\[|.*\.local$)/i)?u.href:'';}catch{return '';}}
++ function google(v){const u=https(v);if(!u)return '';const h=new URL(u).hostname;const parsed=new URL(u);return ((/^(www\.)?google\.(com|com\.na|co\.za)$/.test(h)&&(/^\/maps(?:\/|$)/.test(parsed.pathname)||(parsed.pathname==='/search'&&parsed.searchParams.has('ludocid'))))||['maps.google.com','g.page','maps.app.goo.gl'].includes(h))?u:'';}
++ function settings(raw={}){if(raw==null)raw={};else if(typeof raw!=='object'||Array.isArray(raw))raw={indexable:false};return {title:text(raw.title,200),description:text(raw.description,500),image:https(raw.image),publicDescription:text(raw.publicDescription,1000),city:text(raw.city,80),region:text(raw.region,80),serviceArea:text(raw.serviceArea,200),contactModel:['online','service-area','premises'].includes(raw.contactModel)?raw.contactModel:'online',googleProfile:google(raw.googleProfile),indexable:raw.indexable===undefined?true:raw.indexable===true};}
++ const contentOf=store=>{const c=Array.isArray(store.store_content)?store.store_content[0]||{}:store.store_content||store.content||{};return c.merchandising?c:{...c,merchandising:{seo:c.seo,businessTemplate:c.businessTemplate}};};
++ function profile(store,content=contentOf(store)){const seo=settings(content.merchandising?.seo),template=Object.hasOwn(templates,content.merchandising?.businessTemplate)?content.merchandising.businessTemplate:'retail',name=text(store.name,100)||'Business',category=text(content.category,80)||templates[template],location=[seo.city,seo.region].filter(Boolean).join(', '),description=seo.publicDescription||text(store.description,1000),url=origin+'/'+encodeURIComponent(store.slug);return {store:{id:store.id,slug:store.slug,name:store.name,active:store.active},content:{logo:content.logo},seo,template,name,category,location,description,url,title:seo.title||[name,category,location].filter(Boolean).join(' · '),meta:seo.description||description||[name,category,location].filter(Boolean).join(' · '),image:seo.image||https(content.logo)||origin+'/app-icons/storefront-512.png',eligible:store.active===true&&seo.indexable};}
++ const service=p=>['accommodation','salon','professional'].includes(p.template);
++ const itemPath=(p,item)=>'/'+encodeURIComponent(p.store.slug)+'/'+(service(p)?'services':'products')+'/'+encodeURIComponent(item.id);
++ const visibleItem=item=>item?.active===true&&item.starter_item!==true&&item.template_details?.demo!==true&&item.template_details?.hidden!==true&&Boolean(text(item.name,160));
++ const price=item=>{const v=item.sale_price_minor??item.price_minor;return Number.isSafeInteger(v)&&v>=0?(v/100).toFixed(2):null;};
++ function graph(p,item){const entity={'@type':'Organization','@id':p.url+'#business',name:p.name,url:p.url,description:p.description||p.meta,image:p.image};if(p.seo.contactModel!=='online'){entity['@type']=({retail:'Store',accommodation:'LodgingBusiness',salon:'HealthAndBeautyBusiness',restaurant:'Restaurant',cafe:'CafeOrCoffeeShop',bar:'BarOrPub',professional:'ProfessionalService'})[p.template];if(p.seo.city||p.seo.region)entity.areaServed={'@type':'AdministrativeArea',name:p.location};}if(p.seo.googleProfile)entity.sameAs=[p.seo.googleProfile];const crumbs=[{name:'eNuxes',item:origin+'/'},{name:p.name,item:p.url}],nodes=[entity];if(item){const url=origin+itemPath(p,item),node={'@type':service(p)?'Service':'Product','@id':url+'#item',url,name:text(item.name,160),description:text(item.description,2000),...(https(item.image_url)?{image:https(item.image_url)}:{})};if(service(p))node.provider={'@id':entity['@id']};const amount=price(item);if(amount!==null){node.offers={'@type':'Offer',url,price:amount,priceCurrency:'NAD'};if(!service(p)&&Number.isSafeInteger(item.stock)&&item.stock>=0)node.offers.availability='https://schema.org/'+(item.stock>0?'InStock':'OutOfStock');}nodes.push(node);crumbs.push({name:node.name,item:url});}nodes.push({'@type':'BreadcrumbList',itemListElement:crumbs.map((c,i)=>({'@type':'ListItem',position:i+1,...c}))});return {'@context':'https://schema.org','@graph':nodes};}
++ const json=v=>JSON.stringify(v).replace(/</g,'\\u003c').replace(/\u2028/g,'\\u2028').replace(/\u2029/g,'\\u2029');
++ function head(p,item,noindex=false){const title=item?text(item.name,160)+' · '+p.name:p.title,description=item?text(item.description,500)||title:p.meta,url=item?origin+itemPath(p,item):p.url,image=item?https(item.image_url)||p.image:p.image;return '<title>'+esc(title)+'</title><meta name="description" content="'+esc(description)+'"><link rel="canonical" href="'+esc(url)+'"><meta name="robots" content="'+(noindex||!p.eligible?'noindex, follow':'index, follow, max-image-preview:large')+'">'+[['og:type',item&&!service(p)?'product':'website'],['og:title',title],['og:description',description],['og:url',url],['og:image',image],['og:site_name',p.name]].map(([k,v])=>'<meta property="'+k+'" content="'+esc(v)+'">').join('')+'<meta name="twitter:card" content="summary_large_image"><script type="application/ld+json">'+json(graph(p,item))+'</script>';}
++ function facts(p){return '<p>'+esc(p.description||p.meta)+'</p><p>'+esc(p.category)+(p.location?' · '+esc(p.location):'')+'</p>'+(p.seo.serviceArea?'<p>Service area: '+esc(p.seo.serviceArea)+'</p>':'')+(p.seo.googleProfile?'<p><a rel="noopener noreferrer" href="'+esc(p.seo.googleProfile)+'">Business profile on Google</a></p>':'');}
++ function links(p,items){return '<ul>'+items.filter(visibleItem).map(i=>'<li><a href="'+esc(itemPath(p,i))+'">'+esc(text(i.name,160))+'</a>'+(price(i)!==null?' · N$'+esc(price(i))+(p.template==='accommodation'?' per night':''):'')+'</li>').join('')+'</ul>';}
++ function body(p,items,item){return '<article class="seo-document"><nav aria-label="Breadcrumb"><a href="/">eNuxes</a> / <a href="'+esc(p.url)+'">'+esc(p.name)+'</a></nav><h1>'+esc(item?text(item.name,160):p.name)+'</h1>'+(item?'<p>'+esc(text(item.description,2000))+'</p>'+(https(item.image_url)?'<img src="'+esc(https(item.image_url))+'" alt="'+esc(text(item.name,160))+'" width="640" height="480" loading="eager" fetchpriority="high">':'')+(price(item)!==null?'<p>N$'+esc(price(item))+(p.template==='accommodation'?' per night':'')+'</p>':''):'')+facts(p)+'<h2>'+(service(p)?'Services and rooms':'Products and menu')+'</h2>'+links(p,items)+'<p><a href="/'+esc(p.store.slug)+'">Open '+esc(p.name)+' storefront</a> · <a href="/discover">Discover businesses</a></p></article>';}
++ return {origin,templates,text,esc,slug,https,google,settings,contentOf,profile,service,itemPath,visibleItem,price,graph,json,head,facts,links,body};
++})();
+diff --git a/dist/seo-owner.js b/dist/seo-owner.js
+new file mode 100644
+index 0000000..fb92560
+--- /dev/null
++++ b/dist/seo-owner.js
+@@ -0,0 +1,16 @@
++async function ownerSEOEditor(target,store,token){
++ const content=await contentFor(store.id,token);if(!target.isConnected)return;const initial=EnuxesSEO.profile(store,content),s=initial.seo;
++ const input=(label,key,value,max=200)=>'<label>'+label+'<input name="'+key+'" maxlength="'+max+'" value="'+esc(value)+'"></label>';
++ target.innerHTML='<section class="panel stack"><h2>SEO & Google Visibility</h2><p>Help people discover your published storefront. Google decides whether and how pages appear; rankings and indexing are not guaranteed.</p><form class="seo-editor" id="owner-seo"><fieldset class="owner-field-group"><legend>Search appearance</legend>'+input('Search result title (optional)','title',s.title)+'<small data-title-count>About 50–60 characters is often useful; this is guidance, not a ranking rule. Leave blank for an automatic title.</small><label>Meta description (optional)<textarea name="description" maxlength="500">'+esc(s.description)+'</textarea></label><small data-description-count>About 140–160 characters is a useful guide. Google may choose different text.</small>'+input('Search preview image · HTTPS URL (optional)','image',s.image,2000)+'<label>Or upload a preview image<input name="imageFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif"></label><small>Your public logo is used when no preview image is set.</small><div class="seo-search-preview" aria-label="Search result preview"><small data-seo-url></small><h3 data-seo-title></h3><p data-seo-description></p></div></fieldset><fieldset class="owner-field-group"><legend>Public business information</legend><label>Public business description<textarea name="publicDescription" maxlength="1000">'+esc(s.publicDescription||store.description||'')+'</textarea></label>'+'<small>This description appears in the storefront’s public business information.</small>'+input('Business category','category',content.category,80)+input('Public town or city (optional)','city',s.city,80)+input('Public region (optional)','region',s.region,80)+input('Public service area (optional)','serviceArea',s.serviceArea,200)+'<small>These fields are public. Use a town, region or service area; do not enter a private home address. Your map pin is managed separately.</small><label>How do you meet customers?<select name="contactModel"><option value="online" '+(s.contactModel==='online'?'selected':'')+'>Online only / not specified</option><option value="service-area" '+(s.contactModel==='service-area'?'selected':'')+'>I visit customers in a service area</option><option value="premises" '+(s.contactModel==='premises'?'selected':'')+'>Customers visit my business premises</option></select></label><label>Search visibility<select name="indexable"><option value="true" '+(s.indexable?'selected':'')+'>Allow search-engine discovery</option><option value="false" '+(!s.indexable?'selected':'')+'>Ask search engines not to index this store</option></select></label><small>Search visibility does not make a draft public. Unpublish the store to remove public access. Search engines can take time to process changes.</small></fieldset><fieldset class="owner-field-group"><legend>Google Business Profile</legend>'+input('Your verified Google Business Profile URL (optional)','googleProfile',s.googleProfile,2000)+'<div class="seo-guidance"><ol><li>Check Google’s eligibility rules. Eligible businesses generally make in-person customer contact; online-only businesses are not automatically eligible.</li><li>Create or claim your own profile and complete Google’s verification process.</li><li>After verification, add its public Google Maps or profile link above.</li></ol><a href="https://business.google.com/" target="_blank" rel="noopener noreferrer">Create or manage a Google Business Profile ↗</a> · <a href="https://support.google.com/business/answer/13763036" target="_blank" rel="noopener noreferrer">Check current eligibility rules ↗</a><p>eNuxes does not create, claim or verify a Google Business Profile for you.</p></div></fieldset><button class="primary">Save SEO settings</button><p role="status"></p></form><section class="seo-guidance"><h3>Google search performance</h3><p>No store-level Search Console report is connected here. Store visits in Overview measure internal traffic and do not confirm Google impressions, rankings or indexing.</p></section></section>';
++ const form=target.querySelector('form'),status=form.querySelector('[role=status]');
++ const read=()=>Object.fromEntries(['title','description','image','publicDescription','city','region','serviceArea','contactModel','googleProfile'].map(k=>[k,form.elements[k].value.trim()]).concat([['indexable',form.elements.indexable.value==='true']]));
++ const preview=()=>{const draft=read(),p=EnuxesSEO.profile(store,{...content,category:form.elements.category.value,merchandising:{...content.merchandising,seo:draft}});form.querySelector('[data-seo-url]').textContent=p.url;form.querySelector('[data-seo-title]').textContent=p.title;form.querySelector('[data-seo-description]').textContent=p.meta;form.querySelector('[data-title-count]').textContent=draft.title.length+' characters · about 50–60 is a useful guide. Leave blank for automatic.';form.querySelector('[data-description-count]').textContent=draft.description.length+' characters · about 140–160 is a useful guide. Google may choose different text.';};form.addEventListener('input',preview);preview();
++ form.onsubmit=async event=>{event.preventDefault();const button=form.querySelector('button.primary'),id=readSession()?.user?.id,values=read();button.disabled=true;status.textContent='Saving…';try{if(ownerStore?.id!==store.id||!id)throw Error('Reopen this store’s settings.');if(values.image&&!EnuxesSEO.https(values.image))throw Error('Use a valid public HTTPS image link.');if(values.googleProfile&&!EnuxesSEO.google(values.googleProfile))throw Error('Use a public Google Maps, g.page or Google Business Profile link.');const file=form.elements.imageFile.files[0];if(file)[values.image]=await uploadMedia([file]);const latest=await contentFor(store.id,await getSessionToken());if(readSession()?.user?.id!==id||ownerStore?.id!==store.id||!form.isConnected)throw Error('Your session changed. Reopen settings.');await updateContent(store.id,{category:EnuxesSEO.text(form.elements.category.value,80),merchandising:{...latest.merchandising,seo:EnuxesSEO.settings(values)}},await getSessionToken());form.elements.image.value=values.image;form.elements.imageFile.value='';markSaveFormSaved(form);signalStorefrontSave(store.slug);status.textContent=store.active?'Saved. Public metadata updates on the next page request; Google updates on its own schedule.':'Saved privately. Publish the store when ready.';preview();}catch(error){status.textContent=error.message;}finally{button.disabled=false;}};
++}
++async function renderAdminSEO(target){
++ target.innerHTML='<section class="panel stack"><h2>SEO & Google discovery</h2><p>Published stores use automatic metadata, public HTML, canonical URLs, structured data and dynamic sitemaps. Search engines decide indexing and rankings.</p><div class="toolbar"><a class="button" href="/sitemap.xml" target="_blank" rel="noopener">Platform sitemap ↗</a><a class="button" href="https://search.google.com/search-console" target="_blank" rel="noopener">Open Search Console ↗</a></div><h3>Google Search Console</h3><p data-console-status role="status">Checking connection…</p><div data-console-report></div><div class="toolbar"><button type="button" data-console-refresh>Refresh report</button><button type="button" data-console-submit hidden>Submit sitemap to Google</button></div><form data-console-inspect class="stack" hidden><label>Inspect a published storefront slug<input name="slug" pattern="[a-z0-9]+(-[a-z0-9]+)*" required maxlength="50"></label><button>Check Google’s indexed version</button><p data-inspection-result role="status"></p></form><p class="muted">Google reports are separate from internal store visits. Query rows may be incomplete. This view is restricted to verified Main Admin accounts.</p></section>';
++ const status=target.querySelector('[data-console-status]'),report=target.querySelector('[data-console-report]');
++ const call=async(path='',options={})=>{const response=await fetch('/api/seo/search-console'+path,{...options,headers:{Authorization:'Bearer '+await getSessionToken(),'Content-Type':'application/json'}}),data=await response.json();if(!response.ok)throw Error(data.error||'Google data unavailable');return data;};
++ const load=async()=>{status.textContent='Checking connection…';try{const data=await call();if(!target.isConnected)return;status.textContent=data.connected?'Google Search Console · '+data.startDate+' to '+data.endDate:(data.message||'Not connected. Google authorization is required.');target.querySelector('[data-console-submit]').hidden=!data.connected;target.querySelector('[data-console-inspect]').hidden=!data.connected;if(!data.connected){report.replaceChildren();return;}const n=v=>Number.isFinite(v)?v.toLocaleString('en-NA'):'Unavailable',summary=data.summary;report.innerHTML='<div class="grid">'+[['Google search clicks',summary?.clicks],['Google impressions',summary?.impressions],['Average Google position',summary?.position]].map(([label,value])=>'<article class="panel"><small>'+label+'</small><strong>'+esc(n(value))+'</strong></article>').join('')+'</div><h3>Top available queries</h3><ul>'+data.queries.map(q=>'<li>'+esc(q.keys?.[0])+' · '+esc(n(q.clicks))+' clicks · '+esc(n(q.impressions))+' impressions</li>').join('')+'</ul><h3>Sitemap reports</h3><ul>'+data.sitemaps.map(s=>'<li>'+esc(s.path)+' · '+esc(s.isPending?'Pending':'Processed')+' · '+esc(s.errors??'Unknown')+' errors · '+esc(s.warnings??'Unknown')+' warnings</li>').join('')+'</ul><p>'+esc(data.note)+'</p>';}catch(error){status.textContent=error.message;report.replaceChildren();}};
++ target.querySelector('[data-console-refresh]').onclick=load;target.querySelector('[data-console-submit]').onclick=async()=>{status.textContent='Submitting…';try{status.textContent=(await call('',{method:'POST',body:JSON.stringify({action:'submit-sitemap'})})).message;}catch(error){status.textContent=error.message;}};target.querySelector('form').onsubmit=async event=>{event.preventDefault();const result=target.querySelector('[data-inspection-result]');result.textContent='Checking…';try{const d=await call('?inspect='+encodeURIComponent(event.target.elements.slug.value));result.textContent=d.result?[d.result.coverageState,d.result.verdict,'Last crawl: '+(d.result.lastCrawlTime||'Not reported'),'Checked '+d.checkedAt].filter(Boolean).join(' · '):'Google returned no index status.';}catch(error){result.textContent=error.message;}};await load();
++}
+diff --git a/dist/seo.css b/dist/seo.css
+new file mode 100644
+index 0000000..02f6aff
+--- /dev/null
++++ b/dist/seo.css
+@@ -0,0 +1,2 @@
++/* Public semantic fallback and discovery pages; existing hydrated storefront themes remain intact. */
++.seo-document{max-width:1100px;margin:auto;padding:20px}.seo-document img{max-width:100%;height:auto;object-fit:contain}.seo-document nav{padding:0}.seo-document li{margin-block:10px}.seo-public-facts{max-width:1100px;margin:24px auto;padding:16px;border:1px solid #ccd5e3;border-radius:14px;background:#fff;color:#20304a}.seo-public-facts summary{cursor:pointer;font-weight:650}.seo-public-facts ul{line-height:1.8}.seo-search-preview{background:#fff;border:1px solid #dbe2ed;border-radius:14px;padding:18px;color:#263449;overflow-wrap:anywhere}.seo-search-preview h3{color:#214aab!important;font-size:20px;margin:8px 0}.seo-search-preview p{font-size:14px;line-height:1.6;margin:5px 0}.seo-search-preview small{color:#526275!important}.seo-editor{display:grid;gap:18px}.seo-editor fieldset{display:grid;gap:14px}.seo-editor fieldset label{display:grid;align-items:start}.seo-editor small{font-size:12px;line-height:1.6}.seo-editor textarea{min-height:100px}.seo-guidance{font-size:14px;line-height:1.7}.seo-guidance li{margin-block:8px}.seo-public-facts a{color:#2454a5}@media(prefers-reduced-motion:reduce){.seo-document *{animation:none!important}}body:has(>main>article),body:has(>main>nav){font-family:system-ui,sans-serif;color:#20304a;background:#f7f9fc;margin:0}body:has(>main>nav)>main{max-width:1050px;margin:auto;padding:24px}body:has(>main>nav) article{background:#fff;border:1px solid #d7e1ef;border-radius:14px;padding:20px;margin:16px 0}body:has(>main>nav) a{color:#214aab}
+diff --git a/dist/shop.js b/dist/shop.js
+index f702954..2c6fe07 100644
+--- a/dist/shop.js
++++ b/dist/shop.js
+@@ -297,7 +297,7 @@ function syncFollowButton(){
+ async function startShop(){
+  document.body.classList.add('customer-shop');
+  if(isTrendora())document.body.classList.add('trendora-shop');
+- document.querySelector('meta[name="viewport"]').content='width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover';
++ document.querySelector('meta[name="viewport"]').content='width=device-width, initial-scale=1, viewport-fit=cover';
+  const saved=savedStorePreview?{}:loadSaved(cartKey(),{});
+  shopCart=(Array.isArray(saved.cart)?saved.cart:[]).filter(line=>getProduct(line?.id)&&Number.isInteger(line.quantity)&&line.quantity>0&&line.quantity<=99);
+  shopFav=Array.isArray(saved.fav)?saved.fav:[];
+diff --git a/docs/seo/AUDIT.md b/docs/seo/AUDIT.md
+new file mode 100644
+index 0000000..fc2eede
+--- /dev/null
++++ b/docs/seo/AUDIT.md
+@@ -0,0 +1,47 @@
++# SEO audit — live release 158
++
++Base: bc6b7e910ebcb8c193ed483508ca18752f3a3ff9. Reviewed 14 November 2026. No production writes or migrations were performed.
++
++## Architecture and panels
++
++| Surface | Existing behavior | SEO boundary |
++| --- | --- | --- |
++| Panel 0: marketplace | Anonymous JavaScript directory/map at `/` | Public directory HTML and useful discovery links |
++| Panel 1: Main Admin | `/mainadmin-pro`, Supabase Admin membership plus existing MFA assurance RPC | `noindex`; platform Google reports only after server-side MFA authorization |
++| Panel 2: Owner | `/{slug}/owner`, store membership; settings use existing RLS-protected store_content | `noindex`; SEO editor saves only assigned store content |
++| Panel 3: customer storefront | `/{slug}`; anonymous catalogue reads; receipt-based orders/bookings | Public store and item content only; no order, customer or booking records used in SEO |
++
++The current application is plain browser JavaScript, not React. A Cloudflare Worker already bundles static assets and customizes store icons. Previously its initial HTML contained an empty `#app`; titles/descriptions were generic, item details were dialogs with no crawlable item URLs, and there were no dynamic sitemaps or business JSON-LD. The additive Worker renderer preserves the client application and existing overlay/creator presentations after initialization.
++
++## Actual templates
++
++The source defines seven IDs: `retail` (Retail & Clothing), `accommodation`, `salon`, `restaurant`, `cafe`, `bar`, and `professional` (Professional & Creator). This is Retail plus six specialist profiles, rather than six total. Accommodation/salon/professional catalogue items use `/services/{uuid}`; retail and food/drink menu items use `/products/{uuid}`. Existing storefront routes remain unchanged. Creator portfolio entries are not automatically misrepresented as products or priced services.
++
++## Public data and visibility
++
++Read-only production inspection confirmed:
++- Anonymous businesses policy requires `active AND billing_paid(id)`.
++- Database constraint `business_lifecycle_matches_visibility` requires `active = (lifecycle = 'active')`; deleted, held and closed stores cannot satisfy the anonymous public route.
++- Anonymous products/content visibility derives from their public businesses.
++- Anonymous access does **not** grant the internal lifecycle column. SEO queries deliberately omit it and rely on the verified RLS/constraint pair.
++- Existing `store_content.merchandising` supports additive JSON settings and owner updates under store-membership RLS; existing template authorization remains unchanged.
++- No reliable public content/product `updated_at` columns exist. Sitemaps omit `lastmod` rather than pretending creation/publication/request time is a modification time. Adding database-maintained modification timestamps would require a separately approved migration.
++
++The Worker uses only the existing public/publishable key, with no forwarding of user cookies or bearer tokens. Store SEO reads project category, logo, SEO JSON and template ID; no addresses, staff settings, owner records or booking data are selected. Only explicitly supplied public towns/regions/service areas are used. Search opt-out removes a store and its items from SEO discovery/sitemaps and returns noindex, but does not turn a public store into a private one; unpublishing controls access.
++
++## URLs and domains
++
++Current production links are `/{slug}` on enuxes.com / www.enuxes.com. The canonical origin is https://enuxes.com, preserving the path and all existing owner/store links. Tracking/filter query strings do not create new canonicals. There is no per-store custom-domain mapping or validation mechanism in the schema/runtime. No owner-supplied canonical/domain field is introduced. A future per-store domain feature needs verified host ownership and an Admin-controlled primary-domain mapping before changing canonical generation. Preview/nonprimary hosts are noindex; private routes remain noindex/nofollow.
++
++## Search Console
++
++No connected Google Search Console capability or authorized Google property credentials are available in this session. The optional adapter is implemented behind existing Main Admin MFA authorization. It remains disconnected until approved OAuth setup supplies server-only secrets. No sitemap has been submitted and no real Google performance/index status is claimed. See SEARCH_CONSOLE_SETUP.md.
++
++## Relevant primary documentation
++
++- https://developers.google.com/search/docs/crawling-indexing/javascript/javascript-seo-basics
++- https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap
++- https://developers.google.com/search/docs/appearance/structured-data/local-business
++- https://developers.google.com/webmaster-tools/v1/how-tos/authorizing
++- https://developers.google.com/webmaster-tools/v1/searchanalytics/query
++- https://support.google.com/business/answer/13763036
+diff --git a/docs/seo/REVIEW.md b/docs/seo/REVIEW.md
+new file mode 100644
+index 0000000..8b5f4bd
+--- /dev/null
++++ b/docs/seo/REVIEW.md
+@@ -0,0 +1,30 @@
++# eNuxes automated SEO — review package
++
++This implementation is prepared against the source of live **release 158**, commit `bc6b7e910ebcb8c193ed483508ca18752f3a3ff9`.
++
++The connected GitHub `main` branch is older (8 November). The draft review PR therefore carries an apply-ready patch against the current live source instead of replacing the application with that older mirror. Merging the review-artifact PR alone does not install or deploy the feature.
++
++## Review the implementation
++
++- `AUDIT.md`: four panels, seven actual template IDs, visibility/RLS, URL and domain architecture.
++- `VALIDATION.md`: 138 passing tests, build, browser checks, real anonymous API/Worker checks, Google code-test result, performance limits.
++- `SEARCH_CONSOLE_SETUP.md`: authorized Google setup and server-only secret configuration; no credentials are embedded.
++- `enuxes-seo-v158.patch`: complete source changes and tests, including the documentation above.
++
++## Apply to the correct base after review
++
++Use the current Sites source checkout or a matching source export. Do not apply the patch to the older GitHub main tree.
++
++```sh
++git switch -c feature/automated-storefront-seo bc6b7e910ebcb8c193ed483508ca18752f3a3ff9
++git apply --check enuxes-seo-v158.patch
++git apply enuxes-seo-v158.patch
++npm run build
++npm test
++```
++
++The patch does not include a database migration or generated Worker bundle. `npm run build` generates the Worker bundle using the existing packaging workflow. No new dependency or paid integration is required by the code.
++
++## Approval boundary
++
++No deployment, production database change, Google OAuth connection or sitemap submission has been performed. Review and approve the source changes before deployment. Google Search Console stays disconnected until the platform owner separately authorizes its property and configures server-side OAuth secrets. Actual indexing, ranking and production mobile performance must not be inferred from local tests or a sample-code Rich Results Test.
+diff --git a/docs/seo/SEARCH_CONSOLE_SETUP.md b/docs/seo/SEARCH_CONSOLE_SETUP.md
+new file mode 100644
+index 0000000..732a141
+--- /dev/null
++++ b/docs/seo/SEARCH_CONSOLE_SETUP.md
+@@ -0,0 +1,15 @@
++# Authorized Google Search Console setup
++
++Status: adapter prepared; not connected; no production deployment or Google property changes have been made.
++
++1. The platform owner must verify the enuxes.com Domain property in Google Search Console (or choose the existing verified URL-prefix property). DNS verification and Google account authorization require the account owner's access.
++2. In a Google Cloud project controlled by the platform owner, enable Search Console API, configure OAuth consent, and authorize the desired scopes. Read-only reporting/inspection uses `https://www.googleapis.com/auth/webmasters.readonly`. Sitemap submission additionally requires `https://www.googleapis.com/auth/webmasters` and explicit owner consent.
++3. Obtain an authorized offline refresh token through Google's supported OAuth flow. Do not paste credentials into source code, a public repo, Owner forms or chat.
++4. After approval, configure server-side encrypted runtime secrets `GSC_CLIENT_ID`, `GSC_CLIENT_SECRET`, `GSC_REFRESH_TOKEN` and optionally `GSC_PROPERTY`. The property defaults to `sc-domain:enuxes.com`; only verified platform origin variants are accepted. Never set these as public browser configuration.
++5. After deployment approval, Main Admin → SEO & Google discovery → Refresh report. The server calls the existing `platform_admin_mfa_state` RPC for every request; customers and owners cannot obtain platform metrics. This release does not expose store-level query reports.
++6. Submit the platform sitemap using the explicit Admin button (requires write scope), or submit https://enuxes.com/sitemap.xml in Search Console directly. Submission is a hint and does not guarantee crawling or indexing.
++7. Inspect a published storefront slug to see Google's indexed version, last crawl and verdict. This is not a live URL test. Bulk indexed-page totals are not available in this adapter. Sitemap errors/warnings are distinct from individual URL indexing errors.
++
++Metrics use actual API responses: final web-search data for a 28-day range ending three days before today, aggregate clicks/impressions/position and the top 100 available query rows. Missing data remains unavailable, not zero. Google may omit rows. Internal Overview store visits are never labelled Google search performance. Tokens are refreshed in server memory and never returned or logged.
++
++After the production release is approved, run Google's Rich Results Test against the deployed product/service pages and URL Inspection against verified storefront URLs. Local JSON-LD validation tests do not establish Google rich-result eligibility, indexing or rankings. LocalBusiness rich-result requirements (including an appropriate published address) may not be met by service-area/online-only profiles; this implementation does not invent addresses to satisfy them.
+diff --git a/docs/seo/VALIDATION.md b/docs/seo/VALIDATION.md
+new file mode 100644
+index 0000000..f7ac6e5
+--- /dev/null
++++ b/docs/seo/VALIDATION.md
+@@ -0,0 +1,35 @@
++# SEO validation and release review
++
++## Automated checks
++
++Run from the live-source checkout:
++
++```sh
++npm run build
++npm test
++git diff --check
++```
++
++All 138 tests pass. Tests exercise public/store-specific metadata; all seven template IDs; Product versus Service graphs; truthful offers; breadcrumb positions; script escaping and CSP hashes; existing security headers; opt-out and unpublish exclusions; private-route headers; sitemap sharding at 501 stores/1,001 items; useful product/category/location discovery; anonymous-only data reads; server Admin MFA checks; disconnected Google reporting; OAuth credential containment; explicit same-origin sitemap submission; and existing ordering/booking/creator/overlay tests.
++
++## Browser and upstream checks
++
++- Owner editor checked at 390px and 320px: live title/description preview, character guidance, public fields, Google profile guidance, external-link rejection and search opt-out save using sample data. No horizontal overflow at 320px.
++- Real anonymous Supabase API accepted the public relational store/content/product projections. No production writes were performed.
++- Built Worker was invoked with real anonymous public data: storefront `/mona` returned HTTP 200, meaningful initial HTML, JSON-LD and canonical `https://enuxes.com/mona`; sitemap index returned HTTP 200.
++- Local upstream round trips were roughly six seconds. Earlier five-second limits timed out; rendering now uses one bounded store/content/catalogue request with a ten-second limit. A failed upstream read returns noindex HTTP 503 with the existing client shell, not an indexable empty catalogue. This is not a Core Web Vitals or production-edge performance pass. Benchmark initial response and mobile vitals from the deployed edge after deployment approval; do not claim a speed improvement from local results.
++- CSS and markup maintain the existing hydrated storefront designs. The only shared storefront accessibility change permits pinch zoom.
++
++## Google Rich Results Test
++
++Code-mode validation was run against a generated sample Product page on 14 November 2026. Google detected three valid items: Product snippets, Merchant listings and Breadcrumbs. Merchant listings reported three optional issues: no global identifier/brand, no merchant return policy and no shipping details. The implementation deliberately does not invent these business facts. This is sample-code validation, not a test of a deployed storefront URL or proof of indexing/ranking. Result: https://search.google.com/test/rich-results/result?id=y3Go2xz7EYMk8SsZUVCdJw
++
++## Known limits and approval gates
++
++No production deployment, database migration, Google profile creation/claim, Google OAuth connection, sitemap submission or URL indexing claim has been performed. Search Console requires separately authorized Google property access and server-only configuration. Bulk indexed-page totals are explicitly unavailable; individual authorized URL Inspection is supported.
++
++No accurate public modification timestamps exist for store content/products. Sitemap lastmod is intentionally omitted. A future database-maintained updated_at migration requires separate approval. Per-store custom domains are absent; only the verified platform canonical origin is used. Discovery groups require at least two eligible businesses with meaningful public descriptions; no empty or artificial keyword pages are generated. Storefront initial catalogue HTML is bounded to 100 genuine items; all eligible item URLs remain available through sharded sitemaps and direct detail routes. Directory builders cap scans at 50,000 rows and fail with a retryable status instead of serving silently truncated results; larger directories should use a separately reviewed pagination/indexing change.
++
++## Review base
++
++The running application source is live release 158, commit `bc6b7e910ebcb8c193ed483508ca18752f3a3ff9`. The connected GitHub main branch was last updated on 8 November and is older than that source. The draft GitHub PR carries an apply-ready patch against release 158, with audit and validation documentation. It is a review artifact, not an instruction to deploy or overwrite current live source from the older GitHub main branch.
+diff --git a/scripts/build-worker.mjs b/scripts/build-worker.mjs
+index 9745f41..38f51ac 100644
+--- a/scripts/build-worker.mjs
++++ b/scripts/build-worker.mjs
+@@ -28,6 +28,6 @@ const config=Object.fromEntries(['apiRoot','publicKey'].map(name=>[name,platform
+ const page=await readFile('dist/index.html','utf8');
+ config.inlineScriptHashes=[...page.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)]
+  .filter(match=>match[1].trim()).map(match=>"'sha256-"+createHash('sha256').update(match[1]).digest('base64')+"'");
+-const worker=await readFile('scripts/storefront-worker.mjs','utf8');
++const worker=(await readFile('dist/seo-core.js','utf8'))+'\n'+(await readFile('scripts/seo-worker.mjs','utf8'))+'\n'+(await readFile('scripts/search-console-worker.mjs','utf8'))+'\n'+(await readFile('scripts/storefront-worker.mjs','utf8'));
+ await mkdir('dist/server',{recursive:true});
+ await writeFile('dist/server/index.js','const assets='+JSON.stringify(assets)+';\nconst config='+JSON.stringify(config)+';\n'+worker);
+diff --git a/scripts/dev-preview.mjs b/scripts/dev-preview.mjs
+index 99e644c..eda79d7 100644
+--- a/scripts/dev-preview.mjs
++++ b/scripts/dev-preview.mjs
+@@ -1,3 +1,4 @@
+ import http from 'node:http';import {readFile}from 'node:fs/promises';import {resolve,extname}from 'node:path';
++let seoWorker;
+ const root=resolve('dist'),mime={'.mjs':'text/javascript','.wasm':'application/wasm','.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css','.svg':'image/svg+xml','.png':'image/png','.webp':'image/webp','.woff2':'font/woff2'};
+-http.createServer(async(req,res)=>{try{const pathname=new URL(req.url,'http://localhost').pathname;let path=resolve(root,'.'+pathname);if(!path.startsWith(root+'/')&&path!==root)throw Error();let data;if(pathname==='/cutout-model.onnx'){data=await readFile('dist/vendor/cutout/u2netp.onnx');}else if(pathname==='/__experience-qa'){data=await readFile('tests/experience-qa.html');path+='index.html';}else if(pathname==='/__experience-panel'||((pathname==='/sample/owner'||pathname==='/mainadmin-pro')&&new URL(req.url,'http://localhost').searchParams.has('experience-qa'))){data=(await readFile('dist/index.html','utf8')).replace(/\/platform\.js\?v=[^"<]+/,'/__platform-qa.js').replace('</body>','<script src="/__experience-fixture.js"></script></body>');path+='index.html';}else if(pathname==='/__experience-fixture.js'){data=await readFile('tests/experience-fixture.js');path+='index.js';}else if(pathname==='/__map-qa'){data=(await readFile('dist/index.html','utf8')).replace(/\/platform\.js\?v=[^"<]+/,'/__platform-qa.js').replace('</body>','<script src="/__map-fixture.js"></script></body>');path+='index.html';}else if(pathname==='/__map-fixture.js'){data=await readFile('tests/map-fixture.js');path+='index.js';}else if(pathname==='/__billing-qa'){data=await readFile('tests/billing-qa.html');path+='index.html';}else if(pathname==='/__qa-board'){data=await readFile('tests/board.html');path+='index.html';}else if(pathname==='/__qa-gallery'){data=await readFile('tests/gallery.html');path+='index.html';}else if(pathname==='/__template-qa'){data=await readFile('tests/template-qa.html');path+='index.html';}else if(pathname==='/__platform-qa.js'){data=(await readFile('dist/platform.js','utf8')).replace(/boot\(\);\s*$/,'');path+='index.js';}else{try{data=await readFile(path)}catch{path=resolve(root,'index.html');data=await readFile(path);}}res.writeHead(200,{'Content-Type':mime[extname(path)]||'application/octet-stream','Cache-Control':'no-store'});res.end(data);}catch{res.writeHead(404);res.end();}}).listen(Number(process.argv[process.argv.indexOf('--port')+1]||process.env.PORT||3000),'0.0.0.0');
++http.createServer(async(req,res)=>{try{const pathname=new URL(req.url,'http://localhost').pathname;let path=resolve(root,'.'+pathname);if(!path.startsWith(root+'/')&&path!==root)throw Error();let data;if(pathname==='/cutout-model.onnx'){data=await readFile('dist/vendor/cutout/u2netp.onnx');}else if(pathname==='/__experience-qa'){data=await readFile('tests/experience-qa.html');path+='index.html';}else if(pathname==='/__experience-panel'||((pathname==='/sample/owner'||pathname==='/mainadmin-pro')&&new URL(req.url,'http://localhost').searchParams.has('experience-qa'))){data=(await readFile('dist/index.html','utf8')).replace(/\/platform\.js\?v=[^"<]+/,'/__platform-qa.js').replace('</body>','<script src="/__experience-fixture.js"></script></body>');path+='index.html';}else if(pathname==='/__experience-fixture.js'){data=await readFile('tests/experience-fixture.js');path+='index.js';}else if(pathname==='/__map-qa'){data=(await readFile('dist/index.html','utf8')).replace(/\/platform\.js\?v=[^"<]+/,'/__platform-qa.js').replace('</body>','<script src="/__map-fixture.js"></script></body>');path+='index.html';}else if(pathname==='/__map-fixture.js'){data=await readFile('tests/map-fixture.js');path+='index.js';}else if(pathname==='/__billing-qa'){data=await readFile('tests/billing-qa.html');path+='index.html';}else if(pathname==='/__qa-board'){data=await readFile('tests/board.html');path+='index.html';}else if(pathname==='/__qa-gallery'){data=await readFile('tests/gallery.html');path+='index.html';}else if(pathname==='/__template-qa'){data=await readFile('tests/template-qa.html');path+='index.html';}else if(pathname==='/__platform-qa.js'){data=(await readFile('dist/platform.js','utf8')).replace(/boot\(\);\s*$/,'');path+='index.js';}else if(new URL(req.url,'http://localhost').searchParams.has('seo-preview')||['/sitemap.xml','/robots.txt'].includes(pathname)||pathname.startsWith('/discover')||pathname.startsWith('/sitemaps/')){seoWorker||=(await import('../dist/server/index.js')).default;const response=await seoWorker.fetch(new Request('http://'+req.headers.host+req.url,{method:req.method}));res.writeHead(response.status,Object.fromEntries(response.headers));res.end(Buffer.from(await response.arrayBuffer()));return;}else{try{data=await readFile(path)}catch{path=resolve(root,'index.html');data=await readFile(path);}}res.writeHead(200,{'Content-Type':mime[extname(path)]||'application/octet-stream','Cache-Control':'no-store'});res.end(data);}catch{res.writeHead(404);res.end();}}).listen(Number(process.argv[process.argv.indexOf('--port')+1]||process.env.PORT||3000),'0.0.0.0');
+diff --git a/scripts/search-console-worker.mjs b/scripts/search-console-worker.mjs
+new file mode 100644
+index 0000000..e442446
+--- /dev/null
++++ b/scripts/search-console-worker.mjs
+@@ -0,0 +1,22 @@
++/* Optional server-only OAuth adapter. Never return Google credentials to a browser. */
++async function googleConsole(request,env={}){
++ const headers={'Cache-Control':'no-store','X-Robots-Tag':'noindex, nofollow'};
++ const output=(data,status=200)=>Response.json(data,{status,headers});
++ if(!['GET','POST'].includes(request.method))return output({error:'Method not allowed'},405);
++ const authorization=request.headers.get('Authorization');if(!/^Bearer \S+$/.test(authorization||''))return output({error:'Main Admin access required'},401);
++ let assurance;try{assurance=await fetch(apiRoot+'/rest/v1/rpc/platform_admin_mfa_state',{method:'POST',headers:{apikey:publicKey,Authorization:authorization,'Content-Type':'application/json'},body:'{}',signal:AbortSignal.timeout(5000)});}catch{return output({error:'Admin verification unavailable'},503);}
++ if(!assurance.ok||(await assurance.json())?.authorized!==true)return output({error:'Main Admin verification required'},403);
++ if(request.method==='POST'&&request.headers.get('Origin')!==new URL(request.url).origin)return output({error:'Same-origin request required'},403);
++ if(!env.GSC_CLIENT_ID||!env.GSC_CLIENT_SECRET||!env.GSC_REFRESH_TOKEN)return output({connected:false,message:'Google Search Console is not connected. No Google search metrics or indexing status are available.'});
++ const property=env.GSC_PROPERTY||'sc-domain:enuxes.com';if(!['sc-domain:enuxes.com','https://enuxes.com/','https://www.enuxes.com/'].includes(property))return output({error:'Configure an eNuxes Search Console property'},503);
++ try{
++ const auth=await fetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({client_id:env.GSC_CLIENT_ID,client_secret:env.GSC_CLIENT_SECRET,refresh_token:env.GSC_REFRESH_TOKEN,grant_type:'refresh_token'}),signal:AbortSignal.timeout(8000)});if(!auth.ok)throw Error('Google authorization unavailable');const credentials=await auth.json();if(typeof credentials.access_token!=='string')throw Error('Google authorization unavailable');
++ const call=async(url,method='GET',body)=>{const response=await fetch(url,{method,headers:{Authorization:'Bearer '+credentials.access_token,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(8000)});if(!response.ok)throw Error('Google Search Console request failed');return response.status===204?{}:await response.json();};
++ const base='https://www.googleapis.com/webmasters/v3/sites/'+encodeURIComponent(property);
++ if(request.method==='POST'){const body=await request.json();if(body.action!=='submit-sitemap')return output({error:'Unsupported action'},400);await call(base+'/sitemaps/'+encodeURIComponent(EnuxesSEO.origin+'/sitemap.xml'),'PUT');return output({connected:true,submitted:true,message:'Sitemap submitted. Submission does not guarantee crawling or indexing.'});}
++ const url=new URL(request.url),inspect=url.searchParams.get('inspect');if(inspect){if(!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(inspect))return output({error:'Invalid storefront'},400);const p=await seoStore(inspect);if(!p?.eligible)return output({error:'Public storefront unavailable'},404);const data=await call('https://searchconsole.googleapis.com/v1/urlInspection/index:inspect','POST',{inspectionUrl:p.url,siteUrl:property,languageCode:'en-US'});return output({connected:true,source:'Google Search Console URL Inspection',url:p.url,checkedAt:new Date().toISOString(),result:data.inspectionResult?.indexStatusResult||null});}
++ const end=new Date(Date.now()-3*86400000).toISOString().slice(0,10),start=new Date(Date.parse(end)-27*86400000).toISOString().slice(0,10),query={startDate:start,endDate:end,dataState:'final',type:'web'};
++ const [summary,queries,sitemaps]=await Promise.all([call(base+'/searchAnalytics/query','POST',query),call(base+'/searchAnalytics/query','POST',{...query,dimensions:['query'],rowLimit:100}),call(base+'/sitemaps')]);
++ return output({connected:true,source:'Google Search Console',property,startDate:start,endDate:end,fetchedAt:new Date().toISOString(),summary:summary.rows?.[0]||null,queries:queries.rows||[],sitemaps:(sitemaps.sitemap||[]).map(s=>({path:s.path,isPending:s.isPending,lastSubmitted:s.lastSubmitted,lastDownloaded:s.lastDownloaded,errors:s.errors,warnings:s.warnings})),indexedPages:null,note:'Queries are top available rows, not a complete query export. Indexed-page totals are unavailable here; inspect individual URLs for confirmed Google index status. Internal storefront visits are a separate data source.'});
++ }catch{return output({connected:false,error:'Google data could not be loaded. Check the authorized property and server-side OAuth configuration.'},502);}
++}
+diff --git a/scripts/seo-worker.mjs b/scripts/seo-worker.mjs
+new file mode 100644
+index 0000000..3789991
+--- /dev/null
++++ b/scripts/seo-worker.mjs
+@@ -0,0 +1,31 @@
++/* Anonymous RLS-filtered reads only. No privileged keys or authenticated cookies. */
++const seoStoreSelect='id,slug,name,type,description,active,store_content(category,logo,seo:merchandising->seo,businessTemplate:merchandising->>businessTemplate)';
++const seoItemSelect='id,business_id,name,category,description,image_url,price_minor,sale_price_minor,stock,active,starter_item,template_details';
++async function seoRead(table,query,{count=false}={}){const r=await fetch(apiRoot+'/rest/v1/'+table+'?'+new URLSearchParams(query),{headers:{apikey:publicKey,...(count?{Prefer:'count=exact'}:{})},signal:AbortSignal.timeout(10000)});if(!r.ok)throw Error('Public data unavailable');const rows=await r.json();if(!Array.isArray(rows))throw Error('Invalid public data');return {rows,count:count?Number(r.headers.get('content-range')?.split('/')[1]):null};}
++async function seoStore(slug,{items=false,itemId}={}){const query={select:seoStoreSelect+(items?',products('+seoItemSelect+')':''),slug:'eq.'+slug,active:'eq.true',limit:1,...(items?{'products.active':'eq.true','products.starter_item':'eq.false','products.order':'id','products.limit':100}:{}),...(itemId?{'products.id':'eq.'+itemId}:{})};const {rows}=await seoRead('businesses',query);if(!rows[0])return null;const p=EnuxesSEO.profile(rows[0]);if(items)p.items=(rows[0].products||[]).filter(EnuxesSEO.visibleItem);return p;}
++async function seoStorePage(offset=0,limit=500){return (await seoRead('businesses',{select:seoStoreSelect,active:'eq.true',order:'id',offset,limit})).rows.map(s=>EnuxesSEO.profile(s));}
++async function seoDirectory(){const all=[];for(let offset=0;offset<50000;offset+=500){const batch=await seoStorePage(offset);all.push(...batch.filter(p=>p.eligible));if(batch.length<500)return all;}throw Error('Directory capacity exceeded');}
++function seoResponse(body,type='text/html; charset=utf-8',status=200,head=false,headers={}){return new Response(head?null:body,{status,headers:{'Content-Type':type,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff',...headers}});}
++function seoDocument(title,description,canonical,body,{index=true}={}){return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+EnuxesSEO.esc(title)+'</title><meta name="description" content="'+EnuxesSEO.esc(description)+'"><meta name="robots" content="'+(index?'index, follow':'noindex, follow')+'"><link rel="canonical" href="'+EnuxesSEO.esc(canonical)+'"><link rel="stylesheet" href="/seo.css"></head><body><main>'+body+'</main></body></html>';}
++const xmlHead='<?xml version="1.0" encoding="UTF-8"?>';
++const sitemapXml=urls=>xmlHead+'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+[...new Set(urls)].map(u=>'<url><loc>'+EnuxesSEO.esc(u)+'</loc></url>').join('')+'</urlset>';
++function discoveryGroups(profiles){const groups=new Map();for(const p of profiles){if(!p.eligible||p.description.length<20)continue;for(const [kind,name] of [['category',p.category],['city',p.seo.city],['region',p.seo.region]]){if(!name)continue;const path='/discover/'+kind+'/'+EnuxesSEO.slug(name);if(!groups.has(path))groups.set(path,{path,title:name,kind,rows:[]});groups.get(path).rows.push(p);}if(p.seo.city){const path='/discover/category/'+EnuxesSEO.slug(p.category)+'/city/'+EnuxesSEO.slug(p.seo.city);if(!groups.has(path))groups.set(path,{path,title:p.category+' in '+p.seo.city,kind:'category-city',rows:[]});groups.get(path).rows.push(p);}}return [...groups.values()].filter(g=>g.rows.length>=2);}
++async function catalogueGroups(profiles){const byId=new Map(profiles.map(p=>[p.store.id,p])),groups=new Map();for(let offset=0;offset<50000;offset+=1000){const rows=(await seoRead('products',{select:seoItemSelect,active:'eq.true',order:'id',offset,limit:1000})).rows;for(const item of rows){const p=byId.get(item.business_id),category=EnuxesSEO.text(item.category,80);if(!p||p.description.length<20||!EnuxesSEO.visibleItem(item)||!category)continue;const kind=EnuxesSEO.service(p)?'services':'products',path='/discover/'+kind+'/'+EnuxesSEO.slug(category);if(!groups.has(path))groups.set(path,{path,title:category+' · '+kind,rows:[],items:[]});const g=groups.get(path);if(!g.rows.some(row=>row.store.id===p.store.id))g.rows.push(p);g.items.push({p,item});}if(rows.length<1000)return [...groups.values()].filter(g=>g.rows.length>=2);}throw Error('Catalogue discovery capacity exceeded');}
++function discoveryBody(title,profiles,groups=[]){return '<nav><a href="/">eNuxes marketplace</a> · <a href="/discover">Business directory</a></nav><h1>'+EnuxesSEO.esc(title)+'</h1><p>Explore published business information and visit each storefront for current products, services and details.</p>'+profiles.map(p=>'<article><h2><a href="'+EnuxesSEO.esc(p.url)+'">'+EnuxesSEO.esc(p.name)+'</a></h2>'+EnuxesSEO.facts(p)+'</article>').join('')+(groups.length?'<h2>Browse categories and places</h2><ul>'+groups.map(g=>'<li><a href="'+EnuxesSEO.esc(g.path)+'">'+EnuxesSEO.esc(g.title)+'</a> · '+g.rows.length+' businesses</li>').join('')+'</ul>':'');}
++async function seoRoutes(url,head){
++ const origin=EnuxesSEO.origin,path=url.pathname;
++ if(path==='/robots.txt'&&!['enuxes.com','www.enuxes.com'].includes(url.hostname))return seoResponse('User-agent: *\nDisallow: /\n','text/plain; charset=utf-8',200,head);
++ if(path==='/robots.txt')return seoResponse('User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /*?*owner-preview=\nSitemap: '+origin+'/sitemap.xml\n','text/plain; charset=utf-8',200,head);
++ if(path==='/sitemap.xml'){const [stores,items]=await Promise.all([seoRead('businesses',{select:'id',active:'eq.true',limit:1},{count:true}),seoRead('products',{select:'id',active:'eq.true',limit:1},{count:true})]);if(!Number.isSafeInteger(stores.count)||!Number.isSafeInteger(items.count))throw Error('Sitemap totals unavailable');const urls=[origin+'/sitemaps/discovery.xml'];for(let i=0;i<Math.ceil(stores.count/500);i++)urls.push(origin+'/sitemaps/stores-'+i+'.xml');for(let i=0;i<Math.ceil(items.count/1000);i++)urls.push(origin+'/sitemaps/items-'+i+'.xml');return seoResponse(xmlHead+'<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+urls.map(u=>'<sitemap><loc>'+EnuxesSEO.esc(u)+'</loc></sitemap>').join('')+'</sitemapindex>','application/xml; charset=utf-8',200,head);}
++ const shard=path.match(/^\/sitemaps\/(stores|items)-(0|[1-9]\d{0,5})\.xml$/);
++ if(shard){const offset=Number(shard[2])*(shard[1]==='stores'?500:1000);let urls=[];if(shard[1]==='stores')urls=(await seoStorePage(offset)).filter(p=>p.eligible).map(p=>p.url);else{const {rows}=await seoRead('products',{select:seoItemSelect+',businesses!inner('+seoStoreSelect+')',active:'eq.true',order:'id',offset,limit:1000});urls=rows.filter(EnuxesSEO.visibleItem).map(i=>{const p=EnuxesSEO.profile(i.businesses);return p.eligible?origin+EnuxesSEO.itemPath(p,i):null;}).filter(Boolean);}return seoResponse(sitemapXml(urls),'application/xml; charset=utf-8',200,head);}
++ if(path==='/sitemaps/discovery.xml'||path==='/discover'||path.startsWith('/discover/')){const profiles=await seoDirectory(),groups=[...discoveryGroups(profiles),...await catalogueGroups(profiles)];if(path==='/sitemaps/discovery.xml')return seoResponse(sitemapXml([origin+'/',...(profiles.length>=2?[origin+'/discover']:[]),...groups.map(g=>origin+g.path)]),'application/xml; charset=utf-8',200,head);const group=groups.find(g=>g.path===path),root=path==='/discover';if(!root&&!group)return seoResponse(seoDocument('Directory page unavailable','No public directory results',origin+path,'<h1>Directory page unavailable</h1><a href="/discover">Browse businesses</a>',{index:false}),'text/html; charset=utf-8',404,head,{'X-Robots-Tag':'noindex, follow'});const rows=root?profiles:group.rows,title=root?'Discover businesses on eNuxes':group.title;return seoResponse(seoDocument(title,title,origin+path,discoveryBody(title,rows,root?groups:[])+(group?.items?'<h2>Matching public '+EnuxesSEO.esc(group.items[0].p.template==='salon'?'services':'items')+'</h2><ul>'+group.items.map(({p,item})=>'<li><a href="'+EnuxesSEO.esc(EnuxesSEO.itemPath(p,item))+'">'+EnuxesSEO.esc(item.name)+' · '+EnuxesSEO.esc(p.name)+'</a></li>').join('')+'</ul>':''),{index:rows.length>=2&&['enuxes.com','www.enuxes.com'].includes(url.hostname)}),'text/html; charset=utf-8',200,head);}
++ return null;
++}
++async function seoPage(url,page){const path=url.pathname,match=path.match(/^\/([a-z0-9]+(?:-[a-z0-9]+)*)(?:\/(products|services)\/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}))?\/?$/),privatePage=/\/owner\/?$/.test(path)||path==='/mainadmin-pro'||url.searchParams.has('owner-preview')||url.searchParams.has('tracking')||url.searchParams.has('receipt');
++ if(path==='/'&&!privatePage){page=page.replace('<script src="/seo-owner.js?v=1"></script>','');const profiles=await seoDirectory(),body=discoveryBody('Discover businesses on eNuxes',profiles,discoveryGroups(profiles));return {page:page.replace('</head>','<link rel="canonical" href="'+EnuxesSEO.origin+'/"><meta name="robots" content="'+(['enuxes.com','www.enuxes.com'].includes(url.hostname)?'index, follow':'noindex, follow')+'"><link rel="stylesheet" href="/seo.css"></head>').replace('<main id="app"></main>','<main id="app">'+body+'</main>').replace(/<div class="startup-loading"[\s\S]*?<\/div>/,''),status:200,noindex:!['enuxes.com','www.enuxes.com'].includes(url.hostname)};}
++ if(!privatePage)page=page.replace('<script src="/seo-owner.js?v=1"></script>','');
++ const noindex=privatePage||url.searchParams.has('experience-qa')||!['enuxes.com','www.enuxes.com'].includes(url.hostname);if(privatePage||!match||path==='/index.html')return {page:page.replace('</head>','<meta name="robots" content="noindex, nofollow"></head>'),noindex:true,status:200};
++ const p=await seoStore(match[1],{items:true,itemId:match[3]});if(!p)return {page:seoDocument('Store unavailable','This storefront is not public.',EnuxesSEO.origin+path,'<h1>Store unavailable</h1><a href="/">Browse businesses</a>',{index:false}),noindex:true,status:404};
++ const items=p.items,item=match[3]?items.find(i=>i.id===match[3]):null;if(match[3]&&(!item||match[2]!== (EnuxesSEO.service(p)?'services':'products')))return {page:seoDocument('Page unavailable','This item is not public.',p.url,'<h1>Page unavailable</h1><a href="'+EnuxesSEO.esc(p.url)+'">Visit storefront</a>',{index:false}),status:404,noindex:true};
++ page=page.replace(/<title>[\s\S]*?<\/title>/i,'').replace(/<meta\s+name="description"[^>]*>/gi,'');page=page.replace('</head>',EnuxesSEO.head(p,item,noindex)+'<link rel="stylesheet" href="/seo.css"></head>');page=page.replace('<main id="app"></main>','<main id="app">'+EnuxesSEO.body(p,items,item)+'</main>');page=page.replace(/<div class="startup-loading"[\s\S]*?<\/div>/,'');return {page,status:200,noindex:noindex||!p.eligible,logo:EnuxesSEO.https(p.content.logo)};}
+diff --git a/scripts/storefront-worker.mjs b/scripts/storefront-worker.mjs
+index 6eb2fc4..d705898 100644
+--- a/scripts/storefront-worker.mjs
++++ b/scripts/storefront-worker.mjs
+@@ -81,6 +81,7 @@ async function respond(request) {
+   const shortcut=shortcutFor(entry);
+   return shortcut?shortcutManifest(shortcut,head):new Response(null,{status:404});
+  }
++ try{const special=await seoRoutes(url,head);if(special)return special;}catch{return seoResponse('Search pages are temporarily unavailable. Please retry.','text/plain; charset=utf-8',503,head,{'X-Robots-Tag':'noindex, nofollow','Retry-After':'60'});}
+  if(url.pathname==='/order-bell.mp3')return orderBellResponse(request);
+  if (url.pathname!=='/index.html'&&Object.hasOwn(assets,url.pathname)) return assetResponse(url.pathname,head);
+  const iconMatch=url.pathname.match(storeIcon);
+@@ -99,8 +100,9 @@ async function respond(request) {
+   return assetResponse('/brand-icon-v3.png',head);
+  }
+  const slug=url.pathname.match(storePage)?.[1];
+- const logo=slug&&slug!=='mainadmin-pro'&&url.searchParams.get('owner-preview')!=='1' ? await publicLogo(slug,AbortSignal.timeout(1600)) : null;
+- let page=html;
++ let processed;try{processed=await seoPage(url,html);}catch{return seoResponse(html.replace('</head>','<meta name="robots" content="noindex, nofollow"></head>'),'text/html; charset=utf-8',503,head,{'X-Robots-Tag':'noindex, nofollow','Retry-After':'60'});}
++ let page=processed.page;
++ const logo=processed.logo?new URL(processed.logo):null;
+  const shortcut=shortcutFor(url);
+  if (shortcut) {
+   page=page.replace(/(<link id="page-touch-icon"[^>]*href=")[^"]+/, '$1/app-icons/'+shortcut.variant+'-180.png')
+@@ -110,7 +112,7 @@ async function respond(request) {
+   const path=isStoreMedia(logo)?'/'+slug+'/store-icon?v='+encodeURIComponent(logo.pathname.split('/').pop()):logo.href;
+   page=page.replace(/<link id="page-icon"[^>]*>/,()=>'<link id="page-icon" rel="icon" href="'+escapeAttribute(path)+'" data-store-logo="'+escapeAttribute(logo.href)+'"><link rel="preload" as="image" href="'+escapeAttribute(logo.href)+'">');
+  }
+- return new Response(head?null:page,{headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'}});
++ return new Response(head?null:page,{status:processed.status,headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store',...(processed.noindex?{'X-Robots-Tag':'noindex, nofollow'}:{})}});
+ }
+ 
+ const securityHeaders={
+@@ -140,11 +142,13 @@ async function cutoutModel(request){
+  if(hash!=='309c8469258dda742793dce0ebea8e6dd393174f89934733ecc8b14c76f4ddd8')return new Response('Invalid model',{status:502});
+  return new Response(request.method==='HEAD'?null:bytes,{headers:{'Content-Type':'application/octet-stream','Cache-Control':'public,max-age=86400','X-Content-Type-Options':'nosniff'}});
+ }
+-async function secureResponse(request){
++async function secureResponse(request,env={}){
+  const model=new URL(request.url).pathname==='/cutout-model.onnx';
+- const response=model?(['GET','HEAD'].includes(request.method)?await cutoutModel(request):new Response('Method not allowed',{status:405})):await respond(request);
++ const consoleRoute=new URL(request.url).pathname==='/api/seo/search-console';
++ const response=consoleRoute?await googleConsole(request,env).catch(()=>Response.json({error:'Search Console is temporarily unavailable'},{status:503,headers:{'Cache-Control':'no-store','X-Robots-Tag':'noindex, nofollow'}})):model?(['GET','HEAD'].includes(request.method)?await cutoutModel(request):new Response('Method not allowed',{status:405})):await respond(request);
+  const headers=new Headers(response.headers);
+  for(const [name,value] of Object.entries(securityHeaders))headers.set(name,value);
++ if(response.headers.get('content-type')?.startsWith('text/html')&&request.method!=='HEAD'){const body=await response.clone().text();const matches=[...body.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)];for(const match of matches){const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(match[1]));const hash=btoa(String.fromCharCode(...new Uint8Array(digest)));headers.set('Content-Security-Policy',headers.get('Content-Security-Policy').replace("script-src 'self'","script-src 'self' 'sha256-"+hash+"'"));}}
+  if(new URL(request.url).pathname==='/cutout-worker.js')headers.set('Content-Security-Policy',"default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'; object-src 'none'");
+  return new Response(response.body,{status:response.status,statusText:response.statusText,headers});
+ }
+diff --git a/tests/experience-fixture.js b/tests/experience-fixture.js
+index a496ba4..a998dcf 100644
+--- a/tests/experience-fixture.js
++++ b/tests/experience-fixture.js
+@@ -31,10 +31,10 @@ request=async(endpoint,options={})=>{
+ };
+ adminRequest=async()=>[];getSessionToken=async()=> 'fixture-not-a-real-session';contentFor=async()=>structuredClone(qaContent);
+ const qaReplySettings={...supportReplyDefaults,revision:1};
+-const qaOriginalFetch=window.fetch;window.fetch=(url,options)=>String(url).startsWith('/')?qaOriginalFetch(url,options):Promise.reject(new Error('External requests disabled in preview'));
++const qaOriginalFetch=window.fetch;window.fetch=(url,options)=>String(url).startsWith('/api/seo/search-console')?Promise.resolve(Response.json({connected:false,message:'Google Search Console is not connected. No Google search metrics or indexing status are available.'})):String(url).startsWith('/')?qaOriginalFetch(url,options):Promise.reject(new Error('External requests disabled in preview'));
+ document.querySelector('.startup-loading')?.remove();document.getElementById('visitor-save-prompt')?.remove();nav.closest('header').hidden=false;nav.innerHTML='<strong>eNuxes</strong><span>Business management</span>';
+ if(['owner-tools','booking-tools','creator-tools','owner-support'].includes(qaPanel)){qaContent.business_id=qaStore.id;qaContent.merchandising.businessTemplate=qaPanel==='creator-tools'?'professional':qaPanel==='booking-tools'?'salon':'retail';qaContent.logo='/app-icons/storefront-192.png';ownerTemplateContent=qaContent;readSession=()=>({access_token:'fixture-not-a-real-session',user:{id:'sample-owner'}});document.body.className='workspace';ownerStore=qaStore;ownerTab=qaPanel==='owner-support'?'Inbox':'Overview';ownerDashboard();if(qaPanel==='owner-support'){accountNoticeRows=[{id:'fixture-support',business_id:qaStore.id,kind:'support',title:'Support reply',body:'We have received your support request.',path:'/sample/owner?section=Support',created_at:new Date().toISOString(),read_at:null}];}}
+-else if(['owner-profile','store-details'].includes(qaPanel)){document.body.className='workspace';ownerStore=qaStore;ownerTab=qaPanel==='owner-profile'?'Business profile':'Overview';readSession=()=>({access_token:'fixture',user:{id:'sample-owner'}});ownerDashboard();if(qaPanel==='store-details')ownerBusinessTemplateEditor(document.getElementById('owner-content'),'fixture');}
++else if(['owner-profile','store-details','owner-seo'].includes(qaPanel)){document.body.className='workspace';ownerStore=qaStore;ownerTab=qaPanel==='owner-seo'?'SEO & Google Visibility':qaPanel==='owner-profile'?'Business profile':'Overview';readSession=()=>({access_token:'fixture',user:{id:'sample-owner'}});ownerDashboard();if(qaPanel==='store-details')ownerBusinessTemplateEditor(document.getElementById('owner-content'),'fixture');}
+ else if(qaPanel==='support-admin'){readSession=()=>({access_token:'fixture',user:{id:'sample-admin'}});document.body.className='workspace main-admin';adminStores=[qaStore];section='support';dashboard();}
+ else if(qaPanel==='catalogues'){document.body.className='workspace';ownerStore=qaStore;ownerTab='Catalogues';ownerDashboard();}
+ else if(qaPanel==='owner'){readSession=()=>({access_token:'fixture-not-a-real-session',user:{id:'sample-owner'}});document.body.className='workspace';ownerStore=qaStore;ownerTab='Notifications';ownerDashboard();}
+diff --git a/tests/experience-qa.html b/tests/experience-qa.html
+index b75272c..6977349 100644
+--- a/tests/experience-qa.html
++++ b/tests/experience-qa.html
+@@ -1,3 +1,3 @@
+ <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>eNuxes · Experience review</title><style>
+ *{box-sizing:border-box}body{margin:0;background:#edf1f7;color:#182541;font:14px system-ui}header{padding:20px 28px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;background:white;border-bottom:1px solid #dce3ed}h1{font-size:20px;margin:0;margin-right:auto}label{display:flex;gap:8px;align-items:center}select{padding:10px;border:1px solid #ccd6e4;border-radius:8px;font:inherit}main{padding:24px;display:grid;justify-content:center}iframe{width:390px;height:800px;border:1px solid #dce3ed;background:white;border-radius:16px;box-shadow:0 12px 40px #18254112;max-width:calc(100vw - 48px)}p{margin:0;color:#5b6b83}
+-</style></head><body><header><h1>eNuxes · Experience review</h1><label for="panel">Panel</label><select id="panel"><option value="support-admin">1 · Support reply settings</option><option value="owner-profile">2 · Business profile</option><option value="store-details">2 · Store details</option><option value="owner-tools" selected>2 · Ordering controls</option><option value="booking-tools">2 · Booking controls</option><option value="creator-tools">2 · Creator controls</option><option value="owner">2 · Notifications</option><option value="owner-support">2 · Support notifications</option><option value="admin-pin">1 · Admin notification PIN</option><option value="owner-pin">Owner PIN regression</option><option value="admin">1 · Administrator</option><option value="market">0 · Marketplace</option><option value="store">3 · Standard storefront</option><option value="overlay">Product Overlay</option><option value="product-editor">Overlay editor</option><option value="unready">Editor without migration</option><option value="booking">Booking eligibility</option><option value="creator">Creator Profile</option><option value="creator-editor">Creator editor</option></select><label for="size">Viewport</label><select id="size"><option value="390">Mobile · 390 px</option><option value="320">Narrow mobile · 320 px</option><option value="1024">Desktop · 1024 px</option></select><p>Sample data · no live writes</p></header><main><iframe title="Actual eNuxes components" src="/sample/owner?experience-qa=1&panel=owner-tools"></iframe></main><script>const view=document.querySelector('iframe');document.querySelector('#panel').onchange=e=>view.src=['owner','owner-pin','owner-tools','booking-tools','creator-tools','owner-support'].includes(e.target.value)?'/sample/owner?experience-qa=1&panel='+e.target.value:['admin','support-admin','admin-pin'].includes(e.target.value)?'/mainadmin-pro?experience-qa=1&panel='+e.target.value:'/__experience-panel?panel='+e.target.value;document.querySelector('#size').onchange=e=>view.style.width=e.target.value+'px';</script></body></html>
++</style></head><body><header><h1>eNuxes · Experience review</h1><label for="panel">Panel</label><select id="panel"><option value="support-admin">1 · Support reply settings</option><option value="owner-seo">2 · SEO & Google Visibility</option><option value="owner-profile">2 · Business profile</option><option value="store-details">2 · Store details</option><option value="owner-tools" selected>2 · Ordering controls</option><option value="booking-tools">2 · Booking controls</option><option value="creator-tools">2 · Creator controls</option><option value="owner">2 · Notifications</option><option value="owner-support">2 · Support notifications</option><option value="admin-pin">1 · Admin notification PIN</option><option value="owner-pin">Owner PIN regression</option><option value="admin">1 · Administrator</option><option value="market">0 · Marketplace</option><option value="store">3 · Standard storefront</option><option value="overlay">Product Overlay</option><option value="product-editor">Overlay editor</option><option value="unready">Editor without migration</option><option value="booking">Booking eligibility</option><option value="creator">Creator Profile</option><option value="creator-editor">Creator editor</option></select><label for="size">Viewport</label><select id="size"><option value="390">Mobile · 390 px</option><option value="320">Narrow mobile · 320 px</option><option value="1024">Desktop · 1024 px</option></select><p>Sample data · no live writes</p></header><main><iframe title="Actual eNuxes components" src="/sample/owner?experience-qa=1&panel=owner-tools"></iframe></main><script>const view=document.querySelector('iframe');document.querySelector('#panel').onchange=e=>view.src=['owner-seo','owner','owner-pin','owner-tools','booking-tools','creator-tools','owner-support'].includes(e.target.value)?'/sample/owner?experience-qa=1&panel='+e.target.value:['admin','support-admin','admin-pin'].includes(e.target.value)?'/mainadmin-pro?experience-qa=1&panel='+e.target.value:'/__experience-panel?panel='+e.target.value;document.querySelector('#size').onchange=e=>view.style.width=e.target.value+'px';</script></body></html>
+diff --git a/tests/security-headers.test.mjs b/tests/security-headers.test.mjs
+index cf62c1f..e91c31f 100644
+--- a/tests/security-headers.test.mjs
++++ b/tests/security-headers.test.mjs
+@@ -1,7 +1,7 @@
+ import test from 'node:test';import assert from 'node:assert/strict';import vm from 'node:vm';import {readFileSync} from 'node:fs';import {createHash} from 'node:crypto';
+-const source=readFileSync('scripts/storefront-worker.mjs','utf8').replace('export default {fetch:secureResponse};','globalThis.handler=secureResponse;');
+-function worker(){const c={Response,Headers,URL,TextDecoder,Uint8Array,atob,AbortSignal,config:{apiRoot:'https://fixture.supabase.co',publicKey:'fixture',inlineScriptHashes:["'sha256-fixture'"]},assets:{'/index.html':['text/html',Buffer.from('<h1>fixture</h1>').toString('base64')],'/app.js':['text/javascript',Buffer.from('/* public asset */').toString('base64')]},fetch:async()=>Response.json([])};vm.createContext(c);vm.runInContext(source,c);return c.handler;}
+-test('every panel route retains HTML no-store and has clickjacking/XSS containment headers',async()=>{for(const path of ['/','/mainadmin-pro','/mona/owner','/mona']){const r=await worker()(new Request('https://enuxes.com'+path));assert.equal(r.status,200);assert.equal(r.headers.get('Cache-Control'),'no-store');assert.equal(r.headers.get('X-Frame-Options'),'SAMEORIGIN');const csp=r.headers.get('Content-Security-Policy');assert.match(csp,/script-src 'self' 'sha256-fixture'/);assert.doesNotMatch(csp,/unsafe-eval/);assert.match(csp,/frame-src 'self'/);assert.match(csp,/object-src 'none'/);assert.equal(r.headers.get('Referrer-Policy'),'no-referrer');}});
++const source=readFileSync('dist/seo-core.js','utf8')+'\n'+readFileSync('scripts/seo-worker.mjs','utf8')+'\n'+readFileSync('scripts/search-console-worker.mjs','utf8')+'\n'+readFileSync('scripts/storefront-worker.mjs','utf8').replace('export default {fetch:secureResponse};','globalThis.handler=secureResponse;');
++function worker(){const c={Response,Headers,URL,URLSearchParams,TextDecoder,Uint8Array,atob,AbortSignal,config:{apiRoot:'https://fixture.supabase.co',publicKey:'fixture',inlineScriptHashes:["'sha256-fixture'"]},assets:{'/index.html':['text/html',Buffer.from('<h1>fixture</h1>').toString('base64')],'/app.js':['text/javascript',Buffer.from('/* public asset */').toString('base64')]},fetch:async()=>Response.json([])};vm.createContext(c);vm.runInContext(source,c);return c.handler;}
++test('every panel route retains HTML no-store and has clickjacking/XSS containment headers',async()=>{for(const path of ['/','/mainadmin-pro','/mona/owner','/mona']){const r=await worker()(new Request('https://enuxes.com'+path));assert.equal(r.status,path==='/mona'?404:200);assert.equal(r.headers.get('Cache-Control'),'no-store');assert.equal(r.headers.get('X-Frame-Options'),'SAMEORIGIN');const csp=r.headers.get('Content-Security-Policy');assert.match(csp,/script-src 'self' 'sha256-fixture'/);assert.doesNotMatch(csp,/unsafe-eval/);assert.match(csp,/frame-src 'self'/);assert.match(csp,/object-src 'none'/);assert.equal(r.headers.get('Referrer-Policy'),'no-referrer');}});
+ test('security headers cover assets and method errors as well as page responses',async()=>{for(const [path,method,status] of [['/app.js','GET',200],['/mainadmin-pro','POST',405]]){const r=await worker()(new Request('https://enuxes.com'+path,{method}));assert.equal(r.status,status);assert.equal(r.headers.get('X-Content-Type-Options'),'nosniff');assert.match(r.headers.get('Strict-Transport-Security'),/31536000/);}});
+ test('packaged CSP hashes match actual inline bootstrap bytes',()=>{const bundle=readFileSync('dist/server/index.js','utf8');const html=readFileSync('dist/index.html','utf8');for(const m of html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)){if(m[1].trim())assert.ok(bundle.includes('sha256-'+createHash('sha256').update(m[1]).digest('base64')));}});
+ test('cutout WASM allowance is scoped to its worker, not document scripts',async()=>{const source=readFileSync(new URL('../scripts/storefront-worker.mjs',import.meta.url),'utf8');assert.match(source,/pathname==='\/cutout-worker.js'/);assert.match(source,/script-src 'self' 'wasm-unsafe-eval'/);assert.doesNotMatch(source,/'unsafe-eval'/);});
+diff --git a/tests/seo.test.mjs b/tests/seo.test.mjs
+new file mode 100644
+index 0000000..cedfb39
+--- /dev/null
++++ b/tests/seo.test.mjs
+@@ -0,0 +1,29 @@
++import test from 'node:test';import assert from 'node:assert/strict';import vm from 'node:vm';import {readFileSync}from 'node:fs';import {webcrypto}from 'node:crypto';
++const core=readFileSync('dist/seo-core.js','utf8'),worker=core+'\n'+readFileSync('scripts/seo-worker.mjs','utf8')+'\n'+readFileSync('scripts/search-console-worker.mjs','utf8')+'\n'+readFileSync('scripts/storefront-worker.mjs','utf8').replace('export default {fetch:secureResponse};','globalThis.handler=secureResponse;');
++const id='11111111-1111-4111-8111-111111111111',itemId='22222222-2222-4222-8222-222222222222';
++function fixture(){const store={id,slug:'monas-store',name:'Mona’s Store',type:'RETAIL',description:'Clothing and accessories selected by Mona for everyday wear.',active:true,store_content:{category:'Clothing Stores',logo:'https://images.example/logo.png',merchandising:{businessTemplate:'retail',seo:{city:'Windhoek',region:'Khomas'},templateData:{location:'PRIVATE STREET',team:[{privateNote:'PRIVATE STAFF'}]}}}},item={id:itemId,business_id:id,name:'Blue shirt',category:'Clothing',description:'A blue cotton shirt.',image_url:'https://images.example/shirt.png',price_minor:15000,sale_price_minor:null,stock:2,active:true,starter_item:false,template_details:{}};return {stores:[store],items:[item]};}
++function setup(options={}){const db=fixture(),calls=[],c={Response,Request,Headers,URL,URLSearchParams,TextEncoder,TextDecoder,Uint8Array,atob,btoa,AbortSignal,crypto:webcrypto,config:{apiRoot:'https://fixture.supabase.co',publicKey:'fixture',inlineScriptHashes:["'sha256-fixture'"]},assets:{'/index.html':['text/html',Buffer.from('<!doctype html><html><head><title>App</title><meta name="description" content="app"></head><body><main id="app"></main></body></html>').toString('base64')]},fetch:async(input,opts={})=>{const u=new URL(input);calls.push({u,opts});if(options.fail)throw Error('offline');if(u.pathname.endsWith('/platform_admin_mfa_state'))return Response.json({authorized:options.admin===true},{status:options.admin?200:403});if(u.hostname==='oauth2.googleapis.com')return Response.json({access_token:'test-google-token'});if(u.hostname==='www.googleapis.com')return Response.json(u.pathname.includes('sitemaps')?{sitemap:[]}:{rows:[{clicks:12,impressions:100,position:4.5,keys:['Mona']}]});if(u.hostname==='searchconsole.googleapis.com')return Response.json({inspectionResult:{indexStatusResult:{verdict:'PASS',coverageState:'Indexed'}}});let rows=u.pathname.endsWith('/businesses')?db.stores.filter(s=>s.active):u.pathname.endsWith('/products')?db.items.filter(i=>i.active&&db.stores.some(s=>s.id===i.business_id&&s.active)):[];for(const key of ['slug','id','business_id'])if(u.searchParams.has(key))rows=rows.filter(row=>row[key]===u.searchParams.get(key).slice(3));const total=rows.length,offset=Number(u.searchParams.get('offset')||0),limit=Number(u.searchParams.get('limit')||1000);rows=rows.slice(offset,offset+limit).map(row=>u.pathname.endsWith('/businesses')&&u.searchParams.get('select')?.includes(',products(')?{...row,products:db.items.filter(i=>i.business_id===row.id&&i.active&&!i.starter_item&&(!u.searchParams.has('products.id')||i.id===u.searchParams.get('products.id').slice(3))).slice(0,100)}:u.searchParams.get('select')?.includes('businesses!inner')?{...row,businesses:db.stores.find(s=>s.id===row.business_id)}:row);return Response.json(rows,{headers:{'content-range':'0-0/'+total}});}};vm.createContext(c);vm.runInContext(worker,c);return {db,c,calls,seo:vm.runInContext('EnuxesSEO',c),get:(path,init={},env)=>c.handler(new Request('https://enuxes.com'+path,init),env)};}
++test('storefront HTML has unique real metadata, canonical, content and crawlable product links without JS',async()=>{const {get}=setup(),r=await get('/monas-store?utm_source=share'),html=await r.text();assert.equal(r.status,200);assert.match(html,/<title>Mona’s Store · Clothing Stores · Windhoek, Khomas<\/title>/);assert.match(html,/rel="canonical" href="https:\/\/enuxes.com\/monas-store"/);assert.match(html,/Blue shirt/);assert.match(html,/N\$150.00/);assert.match(html,new RegExp('/monas-store/products/'+itemId));assert.doesNotMatch(html,/PRIVATE STREET|PRIVATE STAFF|customer_name|receipt/);});
++test('all seven actual template IDs render corresponding profiles; online-only never becomes LocalBusiness',()=>{const {seo,db}=setup();for(const key of Object.keys(seo.templates)){db.stores[0].store_content.merchandising.businessTemplate=key;const p=seo.profile(db.stores[0]);assert.equal(p.template,key);assert.equal(seo.graph(p)['@graph'][0]['@type'],'Organization');assert.equal(seo.service(p),['salon','professional','accommodation'].includes(key));}});
++test('physical/service-area schema uses only explicitly public locality; no ratings, addresses or private contacts',()=>{const {seo,db}=setup();db.stores[0].store_content.merchandising.seo.contactModel='premises';const data=JSON.stringify(seo.graph(seo.profile(db.stores[0])));assert.match(data,/"@type":"Store"/);assert.match(data,/Windhoek/);assert.doesNotMatch(data,/PRIVATE|rating|review|streetAddress|phone|email/);});
++test('product detail has Product/Offer/Breadcrumb JSON-LD matching visible prices and scoped CSP hash',async()=>{const {get}=setup(),r=await get('/monas-store/products/'+itemId),html=await r.text(),json=JSON.parse(html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)[1]),product=json['@graph'].find(n=>n['@type']==='Product');assert.equal(product.offers.price,'150.00');assert.equal(product.offers.priceCurrency,'NAD');assert.equal(product.offers.availability,'https://schema.org/InStock');assert.match(html,/N\$150.00/);assert.match(r.headers.get('content-security-policy'),/sha256-/);assert.equal(json['@graph'].at(-1).itemListElement.length,3);});
++test('service offers never invent appointment availability and do not use Product',async()=>{const {db,get}=setup();db.stores[0].store_content.merchandising.businessTemplate='salon';const r=await get('/monas-store/services/'+itemId),body=await r.text();assert.match(body,/"@type":"Service"/);assert.doesNotMatch(body,/InStock|OutOfStock|"@type":"Product"/);assert.equal((await get('/monas-store/products/'+itemId)).status,404);});
++test('owner opt-out is noindex and absent from every sitemap and discovery group; unpublishing immediately becomes 404',async()=>{const {db,get}=setup();db.stores[0].store_content.merchandising.seo.indexable=false;const r=await get('/monas-store');assert.match(r.headers.get('x-robots-tag'),/noindex/);for(const p of ['/sitemaps/stores-0.xml','/sitemaps/items-0.xml','/sitemaps/discovery.xml'])assert.doesNotMatch(await(await get(p)).text(),/monas-store/);db.stores[0].active=false;assert.equal((await get('/monas-store')).status,404);});
++test('drafts, deleted/unavailable items and starter placeholders are excluded',async()=>{const {db,get}=setup();db.items[0].starter_item=true;assert.equal((await get('/monas-store/products/'+itemId)).status,404);assert.doesNotMatch(await(await get('/sitemaps/items-0.xml')).text(),new RegExp(itemId));db.stores[0].active=false;assert.doesNotMatch(await(await get('/sitemaps/stores-0.xml')).text(),/monas-store/);});
++test('private management, previews, unknown routes and index.html are noindex with no store data requests',async()=>{const {get,calls}=setup();for(const path of ['/mainadmin-pro','/monas-store/owner','/monas-store?owner-preview=1','/index.html','/auth/callback']){const before=calls.length,r=await get(path);assert.match(r.headers.get('x-robots-tag'),/noindex/);assert.equal(calls.length,before);assert.doesNotMatch(await r.text(),/Blue shirt|PRIVATE/);}});
++test('sitemap index is dynamic, sharded and omits fabricated modification dates; robots references canonical sitemap',async()=>{const {get}=setup();const index=await(await get('/sitemap.xml')).text();assert.match(index,/sitemapindex/);assert.match(index,/stores-0.xml/);assert.match(index,/items-0.xml/);assert.doesNotMatch(index,/lastmod/);const robots=await(await get('/robots.txt')).text();assert.match(robots,/Sitemap: https:\/\/enuxes.com\/sitemap.xml/);assert.match(robots,/Disallow: \/api\//);});
++test('useful discovery requires two genuine results; no empty or thin indexable pages',async()=>{const {db,get}=setup();assert.equal((await get('/discover/city/windhoek')).status,404);db.stores.push({...structuredClone(db.stores[0]),id:'33333333-3333-4333-8333-333333333333',slug:'second-store',name:'Second Store'});const page=await(await get('/discover/category/clothing-stores/city/windhoek')).text();assert.match(page,/Mona’s Store/);assert.match(page,/Second Store/);assert.match(page,/index, follow/);db.stores[0].active=false;assert.equal((await get('/discover/category/clothing-stores/city/windhoek')).status,404);});
++test('metadata inputs are escaped, unsafe links rejected and malformed visibility fails closed',()=>{const {seo,db}=setup();const raw={title:'</title><script>alert(1)</script>',image:'javascript:alert(1)',googleProfile:'https://evil.test/maps',indexable:'yes'};const s=seo.settings(raw);assert.equal(s.image,'');assert.equal(s.googleProfile,'');assert.equal(s.indexable,false);db.stores[0].store_content.merchandising.seo=raw;const head=seo.head(seo.profile(db.stores[0]));assert.doesNotMatch(head,/<script>alert/);assert.equal(seo.https('https://name:password@example.com'), '');assert.equal(seo.google('https://maps.app.goo.gl/example'),'https://maps.app.goo.gl/example');});
++test('anonymous SEO requests never forward browser credentials or use privileged keys; failed data is 503, not indexable empty 200',async()=>{const s=setup();await s.get('/monas-store',{headers:{Authorization:'Bearer private-token',Cookie:'private'}});for(const call of s.calls){assert.equal(call.opts.headers.Authorization,undefined);assert.equal(call.opts.headers.Cookie,undefined);assert.equal(call.opts.headers.apikey,'fixture');}const failed=await setup({fail:true}).get('/monas-store');assert.equal(failed.status,503);assert.match(failed.headers.get('x-robots-tag'),/noindex/);});
++test('Google monitoring rejects customers/owners and preserves Admin MFA gate; disconnected never invents zero metrics',async()=>{assert.equal((await setup().get('/api/seo/search-console')).status,401);assert.equal((await setup().get('/api/seo/search-console',{headers:{Authorization:'Bearer owner'}})).status,403);const data=await(await setup({admin:true}).get('/api/seo/search-console',{headers:{Authorization:'Bearer admin'}})).json();assert.equal(data.connected,false);assert.equal(data.summary,undefined);});
++test('authorized Google adapter returns real source-labelled responses and never leaks OAuth credentials',async()=>{const s=setup({admin:true}),env={GSC_CLIENT_ID:'id',GSC_CLIENT_SECRET:'secret',GSC_REFRESH_TOKEN:'refresh'};const r=await s.get('/api/seo/search-console',{headers:{Authorization:'Bearer admin'}},env),body=await r.text(),data=JSON.parse(body);assert.equal(data.summary.clicks,12);assert.equal(data.source,'Google Search Console');assert.equal(data.indexedPages,null);assert.doesNotMatch(body,/test-google-token|secret|refresh_token/);assert.equal(r.headers.get('cache-control'),'no-store');const inspected=await(await s.get('/api/seo/search-console?inspect=monas-store',{headers:{Authorization:'Bearer admin'}},env)).json();assert.equal(inspected.result.coverageState,'Indexed');});
++test('sitemap submission requires same origin and explicit action; no Google fetch without authorization',async()=>{const s=setup({admin:true}),env={GSC_CLIENT_ID:'id',GSC_CLIENT_SECRET:'secret',GSC_REFRESH_TOKEN:'refresh'};assert.equal((await s.get('/api/seo/search-console',{method:'POST',headers:{Authorization:'Bearer admin',Origin:'https://evil.test'},body:'{}'},env)).status,403);const r=await s.get('/api/seo/search-console',{method:'POST',headers:{Authorization:'Bearer admin',Origin:'https://enuxes.com'},body:JSON.stringify({action:'submit-sitemap'})},env);assert.equal((await r.json()).submitted,true);});
++
++test('legacy projected null SEO settings preserve automatic discovery defaults',()=>{const {seo,db}=setup();const content={category:'Clothing',logo:'',seo:null,businessTemplate:'retail'};db.stores[0].store_content=content;assert.equal(seo.profile(db.stores[0]).eligible,true);assert.equal(seo.profile(db.stores[0]).seo.indexable,true);});
++test('storefront rendering uses one bounded anonymous relational request, avoiding duplicate catalogue reads',async()=>{const s=setup();await s.get('/monas-store');assert.equal(s.calls.length,1);assert.equal(s.calls[0].u.searchParams.get('products.limit'),'100');assert.equal(s.calls[0].u.searchParams.get('products.starter_item'),'eq.false');assert.doesNotMatch(s.calls[0].u.searchParams.get('select'),/templateData|owner|customer|booking|email|phone/);});
++test('sitemap indexes grow beyond a shard and shard pages do not duplicate URLs',async()=>{const {db,get}=setup(),base=structuredClone(db.stores[0]),item=structuredClone(db.items[0]);db.stores=Array.from({length:501},(_,i)=>({...structuredClone(base),id:'store-'+i,slug:'store-'+i}));db.items=Array.from({length:1001},(_,i)=>({...structuredClone(item),id:'item-'+i,business_id:'store-0'}));const index=await(await get('/sitemap.xml')).text();assert.match(index,/stores-1.xml/);assert.match(index,/items-1.xml/);const first=await(await get('/sitemaps/stores-0.xml')).text(),second=await(await get('/sitemaps/stores-1.xml')).text();assert.equal((first.match(/<url>/g)||[]).length,500);assert.equal((second.match(/<url>/g)||[]).length,1);assert.match(second,/store-500/);assert.doesNotMatch(first,/store-500/);});
++test('product/service discovery groups require distinct eligible businesses and disappear after opt-out',async()=>{const {db,get}=setup();const b=structuredClone(db.stores[0]);b.id='33333333-3333-4333-8333-333333333333';b.slug='other';db.stores.push(b);db.items.push({...db.items[0],id:'44444444-4444-4444-8444-444444444444',business_id:b.id});let r=await get('/discover/products/clothing');assert.equal(r.status,200);assert.match(await r.text(),/Matching public items/);b.store_content.merchandising.seo.indexable=false;assert.equal((await get('/discover/products/clothing')).status,404);});
++test('nonprimary hosts are noindex and cannot inject canonical origins',async()=>{const {c}=setup();const r=await c.handler(new Request('https://preview.example/monas-store'));assert.match(r.headers.get('x-robots-tag'),/noindex/);const html=await r.text();assert.match(html,/rel="canonical" href="https:\/\/enuxes.com\/monas-store"/);assert.doesNotMatch(html,/canonical" href="https:\/\/preview.example/);const robots=await c.handler(new Request('https://preview.example/robots.txt'));assert.match(await robots.text(),/Disallow: \//);});
++test('Google profile links reject generic redirect URLs and image URLs reject embedded credentials',()=>{const {seo}=setup();assert.equal(seo.google('https://www.google.com/url?q=https://evil.test'),'');assert.equal(seo.google('https://www.google.com/maps?cid=123'),'https://www.google.com/maps?cid=123');assert.equal(seo.https('https://secret:password@cdn.example/image.png'),'');});
++
++test('root receipt/tracking URLs remain private noindex shells, without directory data reads',async()=>{const {get,calls}=setup();const r=await get('/?receipt=private');assert.match(r.headers.get('x-robots-tag'),/noindex/);assert.equal(calls.length,0);assert.doesNotMatch(await r.text(),/Mona|Blue shirt/);});
